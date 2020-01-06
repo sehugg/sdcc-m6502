@@ -183,7 +183,7 @@ _m6502_setDefaultOptions (void)
   options.code_loc = 0x8000;
   options.data_loc = 0x80;
   options.xdata_loc = 0;        /* 0 means immediately following data */
-  options.stack_loc = 0x7fff;
+  options.stack_loc = 0xff;
   options.out_fmt = 's';        /* use motorola S19 output */
 
   options.omitFramePtr = 1;     /* no frame pointer (we use SP */
@@ -245,7 +245,7 @@ _m6502_genAssemblerPreamble (FILE * of)
       fprintf (of, "__sdcc_gs_init_startup:\n");
       if (options.stack_loc)
         {
-          fprintf (of, "\tldhx\t#0x%04x\n", options.stack_loc+1);
+          fprintf (of, "\tldx\t#0x%02x\n", options.stack_loc);
           fprintf (of, "\ttxs\n");
         }
       else
@@ -255,15 +255,16 @@ _m6502_genAssemblerPreamble (FILE * of)
       fprintf (of, "\tjmp\t__sdcc_program_startup\n");
       fprintf (of, "__sdcc_init_data:\n");
 
+      // TODO: what if l_XINIT > 255?
       fprintf (of, "; _m6502_genXINIT() start\n");
-      fprintf (of, "        ldhx #0\n");
+      fprintf (of, "        ldx  #0\n");
       fprintf (of, "00001$:\n");
-      fprintf (of, "        cphx #l_XINIT\n");
+      fprintf (of, "        cpx  #l_XINIT\n");
       fprintf (of, "        beq  00002$\n");
       fprintf (of, "        lda  s_XINIT,x\n");
       fprintf (of, "        sta  s_XISEG,x\n");
-      fprintf (of, "        aix  #1\n");
-      fprintf (of, "        bra  00001$\n");
+      fprintf (of, "        inx\n");
+      fprintf (of, "        bne  00001$\n");
       fprintf (of, "00002$:\n");
       fprintf (of, "; _m6502_genXINIT() end\n");
 
@@ -273,7 +274,7 @@ _m6502_genAssemblerPreamble (FILE * of)
       fprintf (of, "\t.area CSEG\n");
       fprintf (of, "__sdcc_program_startup:\n");
       fprintf (of, "\tjsr\t_main\n");
-      fprintf (of, "\tbra\t.\n");
+      fprintf (of, "\tjmp\t.\n");
 
     }
 }
@@ -405,7 +406,7 @@ m6502_dwarfRegNum (const struct reg_info *reg)
 static bool
 _hasNativeMulFor (iCode *ic, sym_link *left, sym_link *right)
 {
-  return getSize (left) == 1 && getSize (right) == 1;
+  return 0;
 }
 
 typedef struct asmLineNode
@@ -759,7 +760,7 @@ static const char *_linkCmd[] =
 /* $3 is replaced by assembler.debug_opts resp. port->assembler.plain_opts */
 static const char *_asmCmd[] =
 {
-  "sdas6808", "$l", "$3", "$2", "$1.asm", NULL
+  "sdas6500", "$l", "$3", "$2", "$1.asm", NULL
 };
 
 static const char * const _libs_m6502[] = { "m6502", NULL, };
@@ -770,7 +771,7 @@ PORT m6502_port =
 {
   TARGET_ID_M6502,
   "m6502",
-  "M6502",                       /* Target name */
+  "MOS 6502",                       /* Target name */
   NULL,                         /* Processor name */
   {
     glue,
@@ -894,7 +895,7 @@ PORT m6502_port =
   hasExtBitOp,                  /* hasExtBitOp */
   oclsExpense,                  /* oclsExpense */
   TRUE,                         /* use_dw_for_init */
-  FALSE,                        /* little_endian */
+  TRUE,                         /* little_endian */
   0,                            /* leave lt */
   0,                            /* leave gt */
   1,                            /* transform <= to ! > */
@@ -915,7 +916,7 @@ PORT m65c02_port =
 {
   TARGET_ID_M65C02,
   "m65c02",
-  "M65C02",                        /* Target name */
+  "WDC 65C02",                        /* Target name */
   NULL,                         /* Processor name */
   {
     glue,
@@ -1039,7 +1040,7 @@ PORT m65c02_port =
   hasExtBitOp,                  /* hasExtBitOp */
   oclsExpense,                  /* oclsExpense */
   TRUE,                         /* use_dw_for_init */
-  FALSE,                        /* little_endian */
+  TRUE,                         /* little_endian */
   0,                            /* leave lt */
   0,                            /* leave gt */
   1,                            /* transform <= to ! > */
