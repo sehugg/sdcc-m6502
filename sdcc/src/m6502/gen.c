@@ -410,19 +410,14 @@ pushConst (int c)
       loadRegFromConst (m6502_reg_x, c);
       pushReg (m6502_reg_x, TRUE);
     }
-  else if (m6502_reg_h->isFree && !c)
+  else if (m6502_reg_h->isFree)
     {
       loadRegFromConst (m6502_reg_h, c);
       pushReg (m6502_reg_h, TRUE);
     }
-  else if (!c)
-    {
-      adjustStack (-1);
-      emitcode ("clr", "1,s");
-      regalloc_dry_run_cost += 3;
-    }
   else
     {
+     // TODO: remove
       pushReg (m6502_reg_a, FALSE);
       pushReg (m6502_reg_a, FALSE);
       loadRegFromConst (m6502_reg_a, c);
@@ -1167,11 +1162,6 @@ loadRegFromConst (reg_info * reg, int c)
 
       if (m6502_reg_x->isLitConst && m6502_reg_x->litConst == c)
         transferRegReg (m6502_reg_x, reg, FALSE);
-      else if (!c)
-        {
-          emitcode ("clra", "");
-          regalloc_dry_run_cost++;
-        }
       else
         {
           emitcode ("lda", "!immedbyte", c);
@@ -1200,11 +1190,6 @@ loadRegFromConst (reg_info * reg, int c)
 
       if (m6502_reg_a->isLitConst && m6502_reg_a->litConst == c)
         transferRegReg (m6502_reg_a, reg, FALSE);
-      else if (!c)
-        {
-          emitcode ("clrx", "");
-          regalloc_dry_run_cost++;
-        }
       else
         {
           emitcode ("ldx", "!immedbyte", c);
@@ -1216,12 +1201,7 @@ loadRegFromConst (reg_info * reg, int c)
       if (reg->isLitConst && reg->litConst == c)
 	break;
 
-      if (!c)
-        {
-          emitcode ("clrh", "");
-          regalloc_dry_run_cost++;
-        }
-      else if (m6502_reg_a->isLitConst && m6502_reg_a->litConst == c)
+      if (m6502_reg_a->isLitConst && m6502_reg_a->litConst == c)
         transferRegReg (m6502_reg_a, reg, FALSE);
       else if (m6502_reg_x->isLitConst && m6502_reg_x->litConst == c)
         transferRegReg (m6502_reg_x, reg, FALSE);
@@ -1381,22 +1361,6 @@ storeConstToAop (int c, asmop * aop, int loffset)
 
   switch (aop->type)
     {
-    case AOP_DIR:
-      /* clr operates with read-modify-write cycles, so don't use if the */
-      /* destination is volatile to avoid the read side-effect. */
-      if (!c && !(aop->op && isOperandVolatile (aop->op, FALSE)) && optimize.codeSize)
-        {
-          /* clr dst : 2 bytes, 5 cycles */
-          emitcode ("clr", "%s", aopAdrStr (aop, loffset, FALSE));
-          regalloc_dry_run_cost += 2;
-        }
-      else
-        {
-          /* mov #0,dst : 3 bytes, 4 cycles */
-          emitcode ("mov", "!immedbyte,%s", c, aopAdrStr (aop, loffset, FALSE));
-          regalloc_dry_run_cost += 3;
-        }
-      break;
     case AOP_REG:
       if (loffset > (aop->size - 1))
         break;
@@ -1404,6 +1368,17 @@ storeConstToAop (int c, asmop * aop, int loffset)
       break;
     case AOP_DUMMY:
       break;
+    case AOP_DIR:
+    case AOP_EXT:
+      /* clr operates with read-modify-write cycles, so don't use if the */
+      /* destination is volatile to avoid the read side-effect. */
+      // TODO: same for 6502?
+      if (!c && IS_M65C02 && !(aop->op && isOperandVolatile (aop->op, FALSE)))
+        {
+          emitcode ("stz", "%s", aopAdrStr (aop, loffset, FALSE));
+          regalloc_dry_run_cost += aop->type == AOP_DIR ? 2 : 3;
+          break;
+        }
     default:
       if (m6502_reg_a->isFree)
         {
@@ -1441,22 +1416,6 @@ storeImmToAop (char *c, asmop * aop, int loffset)
 
   switch (aop->type)
     {
-    case AOP_DIR:
-      /* clr operates with read-modify-write cycles, so don't use if the */
-      /* destination is volatile to avoid the read side-effect. */
-      if (!strcmp (c, zero) && !(aop->op && isOperandVolatile (aop->op, FALSE)) && optimize.codeSize)
-        {
-          /* clr dst : 2 bytes, 5 cycles */
-          emitcode ("clr", "%s", aopAdrStr (aop, loffset, FALSE));
-          regalloc_dry_run_cost += 2;
-        }
-      else
-        {
-          /* mov #0,dst : 3 bytes, 4 cycles */
-          emitcode ("mov", "%s,%s", c, aopAdrStr (aop, loffset, FALSE));
-          regalloc_dry_run_cost += 3;
-        }
-      break;
     case AOP_REG:
       if (loffset > (aop->size - 1))
         break;
@@ -1464,6 +1423,15 @@ storeImmToAop (char *c, asmop * aop, int loffset)
       break;
     case AOP_DUMMY:
       break;
+    case AOP_DIR:
+      /* clr operates with read-modify-write cycles, so don't use if the */
+      /* destination is volatile to avoid the read side-effect. */
+      if (!strcmp (c, zero) && IS_M65C02 && !(aop->op && isOperandVolatile (aop->op, FALSE)))
+        {
+          emitcode ("stz", "%s", aopAdrStr (aop, loffset, FALSE));
+          regalloc_dry_run_cost += 2;
+          break;
+        }
     default:
       if (m6502_reg_a->isFree)
         {
@@ -1515,9 +1483,9 @@ storeRegSignToUpperAop (reg_info * reg, asmop * aop, int loffset, bool isSigned)
       /* Signed case */
       transferRegReg (reg, m6502_reg_a, FALSE);
       emitcode ("rola", "");
-      emitcode ("clra", "");
+      emitcode ("lda", "#0");
       emitcode ("sbc", "#0");
-      regalloc_dry_run_cost += 4;
+      regalloc_dry_run_cost += 5;
       m6502_useReg (m6502_reg_a);
       while (loffset < size)
         storeRegToAop (m6502_reg_a, aop, loffset++);
@@ -4640,10 +4608,10 @@ addSign (operand * result, int offset, int sign)
       if (sign)
         {
           emitcode ("rola", "");
-          emitcode ("clra", "");
+          emitcode ("lda", "#0");
           emitcode ("sbc", zero);
           m6502_dirtyReg (m6502_reg_a, FALSE);
-          regalloc_dry_run_cost += 4;
+          regalloc_dry_run_cost += 5;
           while (size--)
             storeRegToAop (m6502_reg_a, AOP (result), offset++);
         }
@@ -4868,7 +4836,7 @@ genMultOneByte (operand * left, operand * right, operand * result)
 
   /* case 3 */
   adjustStack (-1);
-  emitcode ("clr", "1,s");
+  emitcode ("clr", "1,s"); // TODO
   regalloc_dry_run_cost += 3;
 
   loadRegFromAop (m6502_reg_a, AOP (left), 0);
@@ -6922,9 +6890,9 @@ genRRC (iCode * ic)
   /* now we need to put the carry into the
      highest order byte of the result */
   offset = AOP_SIZE (result) - 1;
-  emitcode ("clra", "");
+  emitcode ("lda", "#0");
   emitcode ("rora", "");
-  regalloc_dry_run_cost += 2;
+  regalloc_dry_run_cost += 3;
   m6502_dirtyReg (m6502_reg_a, FALSE);
   if (resultInA)
     {
@@ -7000,9 +6968,9 @@ genRLC (iCode * ic)
   /* now we need to put the carry into the
      lowest order byte of the result */
   offset = 0;
-  emitcode ("clra", "");
+  emitcode ("lda", "#0");
   emitcode ("rola", "");
-  regalloc_dry_run_cost += 2;
+  regalloc_dry_run_cost += 3;
   m6502_dirtyReg (m6502_reg_a, FALSE);
   if (resultInA)
     {
@@ -7089,9 +7057,9 @@ genGetAbit (iCode * ic)
           //fallthrough
         case 7:
           emitcode ("rola", "");
-          emitcode ("clra", "");
+          emitcode ("lda", "#0");
           emitcode ("rola", "");
-          regalloc_dry_run_cost += 3;
+          regalloc_dry_run_cost += 4;
           break;
         }
       m6502_dirtyReg (m6502_reg_a, FALSE);
@@ -7305,7 +7273,7 @@ AccLsh (int shCount)
       return;
     case 7:
       accopWithMisc ("rora", "");
-      accopWithMisc ("clra", "");
+      accopWithMisc ("lda", "#0");
       accopWithMisc ("rora", "");
       /* total: 3 cycles, 3 bytes */
       return;
@@ -7331,7 +7299,7 @@ AccSRsh (int shCount)
   if (shCount == 7)
     {
       accopWithMisc ("rola", "");
-      accopWithMisc ("clra", "");
+      accopWithMisc ("lda", "#0");
       accopWithMisc ("sbc", zero);
       /* total: 4 cycles, 4 bytes */
       return;
@@ -7386,7 +7354,7 @@ AccRsh (int shCount, bool sign)
       return;
     case 7:
       accopWithMisc ("rola", "");
-      accopWithMisc ("clra", "");
+      accopWithMisc ("lda", "#0");
       accopWithMisc ("rola", "");
       /* total: 3 cycles, 3 bytes */
       return;
@@ -8663,9 +8631,9 @@ finish:
         {
           /* signed bitfield: sign extension with 0x00 or 0xff */
           emitcode ("rola", "");
-          emitcode ("clra", "");
+          emitcode ("lda", "#0");
           emitcode ("sbc", zero);
-          regalloc_dry_run_cost += 4;
+          regalloc_dry_run_cost += 5;
 
           while (rsize--)
             storeRegToAop (m6502_reg_a, AOP (result), offset++);
@@ -8878,9 +8846,9 @@ finish:
 
           /* signed bitfield: sign extension with 0x00 or 0xff */
           emitcode ("rola", "");
-          emitcode ("clra", "");
+          emitcode ("lda", "#0");
           emitcode ("sbc", zero);
-          regalloc_dry_run_cost += 4;
+          regalloc_dry_run_cost += 5;
 
           while (rsize--)
             storeRegToAop (m6502_reg_a, AOP (result), offset++);
@@ -10127,7 +10095,7 @@ genCast (iCode * ic)
               if (AOP (result)->aopu.aop_reg[0] != m6502_reg_a)
                 loadRegFromAop (m6502_reg_a, AOP (right), 0);
               accopWithMisc ("rola", "");
-              accopWithMisc ("clra", "");
+              accopWithMisc ("lda", "#0");
               accopWithMisc ("sbc", zero);
               storeRegToAop (m6502_reg_a, AOP (result), 1);
               if (save_a)
@@ -10209,7 +10177,7 @@ genCast (iCode * ic)
   else if (size)
     {
       accopWithMisc ("rola", "");
-      accopWithMisc ("clra", "");
+      accopWithMisc ("lda", "#0");
       accopWithMisc ("sbc", zero);
       while (size--)
         storeRegToAop (m6502_reg_a, AOP (result), offset++);

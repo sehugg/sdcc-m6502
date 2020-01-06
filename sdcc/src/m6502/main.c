@@ -559,6 +559,7 @@ static m6502opcodedata m6502opcodeDataTable[] =
     {"sthx",  M6502OP_STHX},
     {"stop",  M6502OP_INH},
     {"stx",   M6502OP_STD},
+    {"stz",   M6502OP_STD},
     {"swi",   M6502OP_INH},
     {"tap",   M6502OP_INH},
     {"tax",   M6502OP_INH},
