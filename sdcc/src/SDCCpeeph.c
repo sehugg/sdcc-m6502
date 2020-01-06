@@ -322,7 +322,7 @@ FBYNAME (labelIsReturnOnly)
     ;
 
   retInst = "ret";
-  if (TARGET_HC08_LIKE)
+  if (TARGET_HC08_LIKE || TARGET_M6502_LIKE)
     retInst = "rts";
   if (strcmp(p, retInst) == 0)
     return TRUE;
@@ -406,7 +406,7 @@ FBYNAME (labelIsUncondJump)
       jpInst = "ljmp";
       jpInst2 = "sjmp";
     }
-  else if (TARGET_HC08_LIKE)
+  else if (TARGET_HC08_LIKE || TARGET_M6502_LIKE)
     {
       jpInst = "jmp";
       jpInst2 = "bra";

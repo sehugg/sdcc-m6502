@@ -1661,7 +1661,8 @@ operandFromSymbol (symbol * sym)
   /* under the following conditions create a
      register equivalent for a local symbol */
   if (sym->level && sym->etype && SPEC_OCLS (sym->etype) &&
-      (IN_FARSPACE (SPEC_OCLS (sym->etype)) && !TARGET_HC08_LIKE && (!(options.model == MODEL_FLAT24))) && options.stackAuto == 0)
+      (IN_FARSPACE (SPEC_OCLS (sym->etype)) && !TARGET_HC08_LIKE && !TARGET_M6502_LIKE &&
+      (!(options.model == MODEL_FLAT24))) && options.stackAuto == 0)
     {
       ok = 0;
     }
@@ -1674,7 +1675,7 @@ operandFromSymbol (symbol * sym)
       !sym->reqv &&                     /* does not already have a reg equivalence */
       !IS_VOLATILE (sym->etype) &&      /* not declared as volatile */
       !sym->islbl &&                    /* not a label */
-      !(TARGET_HC08_LIKE && (getSize (sym->type) > 2)) && /* will fit in regs */
+      !((TARGET_HC08_LIKE || TARGET_M6502_LIKE) && (getSize (sym->type) > 2)) && /* will fit in regs */
       ok                                /* farspace check */
     )
     {
@@ -1959,7 +1960,7 @@ geniCodeRValue (operand * op, bool force)
     return op;
 
   /* if this is not a temp symbol then */
-  if (!IS_ITEMP (op) && !force && !(IN_FARSPACE (SPEC_OCLS (etype)) && !TARGET_HC08_LIKE))
+  if (!IS_ITEMP (op) && !force && !(IN_FARSPACE (SPEC_OCLS (etype)) && !TARGET_HC08_LIKE && !TARGET_M6502_LIKE))
     {
       op = operandFromOperand (op);
       op->isaddr = 0;
@@ -1967,7 +1968,7 @@ geniCodeRValue (operand * op, bool force)
     }
 
   if (IS_SPEC (type) &&
-      IS_TRUE_SYMOP (op) && (!(IN_FARSPACE (SPEC_OCLS (etype)) && !TARGET_HC08_LIKE) || (options.model == MODEL_FLAT24)))
+      IS_TRUE_SYMOP (op) && (!(IN_FARSPACE (SPEC_OCLS (etype)) && !TARGET_HC08_LIKE && !TARGET_M6502_LIKE) || (options.model == MODEL_FLAT24)))
     {
       op = operandFromOperand (op);
       op->isaddr = 0;
@@ -2190,7 +2191,7 @@ geniCodeDivision (operand *left, operand *right, RESULT_TYPE resultType, bool pt
       !IS_FLOAT (letype) &&
       !IS_FIXED (letype) && !IS_UNSIGNED (letype) &&
       ((p2 = powof2 ((TYPE_TARGET_ULONG) ulFromVal (OP_VALUE (right)))) > 0) &&
-      (TARGET_Z80_LIKE || TARGET_HC08_LIKE))
+      (TARGET_Z80_LIKE || TARGET_HC08_LIKE || TARGET_M6502_LIKE))
     {
       operand *tmp;
       symbol *label = newiTempLabel (NULL);
@@ -3599,7 +3600,7 @@ geniCodeReceive (value * args, operand * func)
           if (!sym->addrtaken && !IS_VOLATILE (sym->etype))
             {
 
-              if ((IN_FARSPACE (SPEC_OCLS (sym->etype)) && !TARGET_HC08_LIKE) &&
+              if ((IN_FARSPACE (SPEC_OCLS (sym->etype)) && !TARGET_HC08_LIKE && !TARGET_M6502_LIKE) &&
                   options.stackAuto == 0 && (!(options.model == MODEL_FLAT24)))
                 {
                 }
@@ -4103,7 +4104,7 @@ geniCodeCritical (ast * tree, int lvl)
   operand *op = NULL;
   sym_link *type;
 
-  if (!options.stackAuto && !TARGET_HC08_LIKE)
+  if (!options.stackAuto && !TARGET_HC08_LIKE && !TARGET_M6502_LIKE)
     {
       type = newLink (SPECIFIER);
       SPEC_VOLATILE (type) = 1;

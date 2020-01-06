@@ -366,6 +366,9 @@ static PORT *_ports[] = {
 #if !OPT_DISABLE_PDK15
   &pdk15_port,
 #endif
+#if !OPT_DISABLE_M6502
+  &m6502_port,
+#endif
 };
 
 #define NUM_PORTS (sizeof(_ports)/sizeof(_ports[0]))
@@ -1759,7 +1762,7 @@ linkEdit (char **envp)
           WRITE_SEG_LOC (BIT_NAME, 0);
 
           /* stack start */
-          if ((options.stack_loc) && (options.stack_loc < 0x100) && !TARGET_HC08_LIKE)
+          if ((options.stack_loc) && (options.stack_loc < 0x100) && !TARGET_HC08_LIKE && !TARGET_M6502_LIKE)
             {
               WRITE_SEG_LOC ("SSEG", options.stack_loc);
             }
