@@ -25,8 +25,9 @@
 /* Use the D macro for basic (unobtrusive) debugging messages */
 #define D(x) do if (options.verboseAsm) { x; } while (0)
 /* Use the DD macro for detailed debugging messages */
-#define DD(x)
-//#define DD(x) x
+//#define DD(x)
+// TODO
+#define DD(x) x
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -166,9 +167,9 @@ transferRegReg (reg_info *sreg, reg_info *dreg, bool freesrc)
     case A_IDX:
       switch (srcidx)
         {
-        case H_IDX:            /* H to A */
-          pushReg (m6502_reg_h, FALSE);
-          pullReg (m6502_reg_a);
+        case H_IDX:            /* Y to A */
+          emitcode ("tya", "");
+          regalloc_dry_run_cost++;
           break;
         case X_IDX:            /* X to A */
           emitcode ("txa", "");
@@ -181,13 +182,16 @@ transferRegReg (reg_info *sreg, reg_info *dreg, bool freesrc)
     case H_IDX:
       switch (srcidx)
         {
-        case A_IDX:            /* A to H */
-          pushReg (m6502_reg_a, FALSE);
-          pullReg (m6502_reg_h);
+        case A_IDX:            /* A to Y */
+          emitcode ("tay", "");
+          regalloc_dry_run_cost++;
           break;
-        case X_IDX:            /* X to H */
-          pushReg (m6502_reg_x, FALSE);
-          pullReg (m6502_reg_h);
+        case X_IDX:            /* X to Y */
+          pushReg (m6502_reg_a, FALSE);
+          emitcode ("txa", "");
+          emitcode ("tay", "");
+          regalloc_dry_run_cost += 2;
+          pullReg (m6502_reg_a);
           break;
         default:
           error = 1;
@@ -200,9 +204,12 @@ transferRegReg (reg_info *sreg, reg_info *dreg, bool freesrc)
           emitcode ("tax", "");
           regalloc_dry_run_cost++;
           break;
-        case H_IDX:            /* H to X */
-          pushReg (m6502_reg_h, FALSE);
-          pullReg (m6502_reg_x);
+        case H_IDX:            /* Y to X */
+          pushReg (m6502_reg_a, FALSE);
+          emitcode ("tya", "");
+          emitcode ("tax", "");
+          regalloc_dry_run_cost += 2;
+          pullReg (m6502_reg_a);
           break;
         default:
           error = 1;
@@ -211,7 +218,7 @@ transferRegReg (reg_info *sreg, reg_info *dreg, bool freesrc)
     case HX_IDX:
       switch (srcidx)
         {
-        case XA_IDX:           /* XA to HX */
+        case XA_IDX:           /* XA to YX */
           pushReg (m6502_reg_x, FALSE);
           pullReg (m6502_reg_h);
           emitcode ("tax", "");
@@ -277,39 +284,39 @@ pushReg (reg_info * reg, bool freereg)
   switch (regidx)
     {
     case A_IDX:
-      emitcode ("psha", "");
+      emitcode ("pha", "");
       regalloc_dry_run_cost++;
       _G.stackPushes++;
       updateCFA ();
       break;
     case X_IDX:
-      emitcode ("pshx", "");
+      emitcode ("phx", "");
       regalloc_dry_run_cost++;
       _G.stackPushes++;
       updateCFA ();
       break;
     case H_IDX:
-      emitcode ("pshh", "");
+      emitcode ("phy", "");
       regalloc_dry_run_cost++;
       _G.stackPushes++;
       updateCFA ();
       break;
     case HX_IDX:
-      emitcode ("pshx", "");
+      emitcode ("phx", "");
       regalloc_dry_run_cost++;
       _G.stackPushes++;
       updateCFA ();
-      emitcode ("pshh", "");
+      emitcode ("phy", "");
       regalloc_dry_run_cost++;
       _G.stackPushes++;
       updateCFA ();
       break;
     case XA_IDX:
-      emitcode ("psha", "");
+      emitcode ("pha", "");
       regalloc_dry_run_cost++;
       updateCFA ();
       _G.stackPushes++;
-      emitcode ("pshx", "");
+      emitcode ("phx", "");
       regalloc_dry_run_cost++;
       updateCFA ();
       _G.stackPushes++;
@@ -333,39 +340,39 @@ pullReg (reg_info * reg)
   switch (regidx)
     {
     case A_IDX:
-      emitcode ("pula", "");
+      emitcode ("pla", "");
       regalloc_dry_run_cost++;
       _G.stackPushes--;
       updateCFA ();
       break;
     case X_IDX:
-      emitcode ("pulx", "");
+      emitcode ("plx", "");
       regalloc_dry_run_cost++;
       _G.stackPushes--;
       updateCFA ();
       break;
     case H_IDX:
-      emitcode ("pulh", "");
+      emitcode ("ply", "");
       regalloc_dry_run_cost++;
       _G.stackPushes--;
       updateCFA ();
       break;
     case HX_IDX:
-      emitcode ("pulh", "");
+      emitcode ("ply", "");
       regalloc_dry_run_cost++;
       _G.stackPushes--;
       updateCFA ();
-      emitcode ("pulx", "");
+      emitcode ("plx", "");
       regalloc_dry_run_cost++;
       _G.stackPushes--;
       updateCFA ();
       break;
     case XA_IDX:
-      emitcode ("pulx", "");
+      emitcode ("plx", "");
       regalloc_dry_run_cost++;
       _G.stackPushes--;
       updateCFA ();
-      emitcode ("pula", "");
+      emitcode ("pla", "");
       regalloc_dry_run_cost++;
       _G.stackPushes--;
       updateCFA ();
@@ -498,16 +505,17 @@ adjustStack (int n)
         {
           if (n == -1)
             {
-              emitcode ("pshh", "");      /* 1 byte,  2 cycles */
+              emitcode ("pha", "");      /* 1 byte,  2 cycles */
               regalloc_dry_run_cost++;
             }
-          else if (n == 1 && optimize.codeSize && m6502_reg_h->isFree)
+          else if (n == 1 && optimize.codeSize && m6502_reg_a->isFree)
             {
-              emitcode ("pulh", "");      /* 1 byte,  3 cycles */
+              emitcode ("pla", "");      /* 1 byte,  3 cycles */
               regalloc_dry_run_cost++;
             }
           else
             {
+        // TODO
               emitcode ("ais", "#%d", n); /* 2 bytes, 2 cycles */
               regalloc_dry_run_cost += 2;
             }
@@ -1794,7 +1802,7 @@ rmwWithAop (char *rmwop, asmop * aop, int loffset)
       break;
     case AOP_SOF:
       {
-        int offset = aop->size - 1 - loffset;
+        int offset = loffset; // SEH: aop->size - 1 - loffset;
         offset += _G.stackOfs + _G.stackPushes + aop->aopu.aop_stk + 1;
         if ((offset > 0xff) || (offset < 0))
           {
@@ -2800,7 +2808,7 @@ aopAdrStr (asmop * aop, int loffset, bool bit16)
 {
   char *s = buffer;
   char *rs;
-  int offset = aop->size - 1 - loffset - (bit16 ? 1 : 0);
+  int offset = loffset; // SEH: aop->size - 1 - loffset - (bit16 ? 1 : 0);
   int xofs;
 
   /* offset is greater than
@@ -3395,7 +3403,7 @@ genUminus (iCode * ic)
 {
   int offset, size;
   sym_link *optype;
-  char *sub;
+  bool carry = true;
   bool needpula;
   asmop *result;
 
@@ -3456,7 +3464,8 @@ genUminus (iCode * ic)
       else
         {
           loadRegFromConst (m6502_reg_a, 0);
-          accopWithAop ("sub", AOP (IC_LEFT (ic)), 0);
+          emitcode("sec", "");
+          accopWithAop ("sbc", AOP (IC_LEFT (ic)), 0);
         }
       if (result0 == m6502_reg_a || (result0 && result0 == left1))
         pushReg (m6502_reg_a, TRUE);
@@ -3485,13 +3494,14 @@ genUminus (iCode * ic)
   result = AOP (IC_RESULT (ic));
 
   needpula = pushRegIfSurv (m6502_reg_a);
-  sub = "sub";
   while (size--)
     {
       loadRegFromConst (m6502_reg_a, 0);
-      accopWithAop (sub, AOP (IC_LEFT (ic)), offset);
+      if (carry)
+        emitcode("sec", "");
+      accopWithAop ("sbc", AOP (IC_LEFT (ic)), offset);
       storeRegToAop (m6502_reg_a, result, offset++);
-      sub = "sbc";
+      carry = false;
     }
   storeRegSignToUpperAop (m6502_reg_a, result, offset, SPEC_USIGN (operandType (IC_LEFT (ic))));
   pullOrFreeReg (m6502_reg_a, needpula);
@@ -4435,7 +4445,8 @@ genPlusIncr (iCode * ic)
       else
         needpula = FALSE;
       loadRegFromAop (m6502_reg_a, AOP (result), 0);
-      accopWithAop ("add", AOP (IC_RIGHT (ic)), 0);
+      emitcode("clc", "");
+      accopWithAop ("adc", AOP (IC_RIGHT (ic)), 0);
       m6502_useReg (m6502_reg_a);
       storeRegToAop (m6502_reg_a, AOP (result), 0);
       m6502_freeReg (m6502_reg_a);
@@ -4466,7 +4477,7 @@ static void
 genPlus (iCode * ic)
 {
   int size, offset = 0;
-  char *add;
+  bool clc = true;
   asmop *leftOp, *rightOp;
   bool needpulla;
   bool earlystore = FALSE;
@@ -4507,7 +4518,6 @@ genPlus (iCode * ic)
 
   leftOp = AOP (IC_LEFT (ic));
   rightOp = AOP (IC_RIGHT (ic));
-  add = "add";
 
   offset = 0;
   needpulla = pushRegIfSurv (m6502_reg_a);
@@ -4524,9 +4534,11 @@ genPlus (iCode * ic)
         pullReg (m6502_reg_a);
       else
         loadRegFromAop (m6502_reg_a, leftOp, offset);
+      if (clc)
+        emitcode ("clc", "");
       if (!mayskip || AOP_TYPE (IC_RIGHT (ic)) != AOP_LIT || (byteOfVal (AOP (IC_RIGHT (ic))->aopu.aop_lit, offset) != 0x00) )
         {
-          accopWithAop (add, rightOp, offset);
+          accopWithAop ("adc", rightOp, offset);
           mayskip = FALSE;
           skip = FALSE;
         }
@@ -4542,7 +4554,7 @@ genPlus (iCode * ic)
       offset++;
       m6502_freeReg (m6502_reg_a);
       if (!skip)
-        add = "adc";              /* further adds must propagate carry */
+        clc = false;              /* further adds must propagate carry */
     }
  if (delayedstore)
    pullReg (m6502_reg_a);
@@ -4648,7 +4660,7 @@ addSign (operand * result, int offset, int sign)
 static void
 genMinus (iCode * ic)
 {
-  char *sub;
+  bool carry = true;
   int size, offset = 0;
   bool needpulla;
   bool earlystore = FALSE;
@@ -4675,7 +4687,6 @@ genMinus (iCode * ic)
 
   leftOp = AOP (IC_LEFT (ic));
   rightOp = AOP (IC_RIGHT (ic));
-  sub = "sub";
   offset = 0;
 
   needpulla = pushRegIfSurv (m6502_reg_a);
@@ -4683,7 +4694,9 @@ genMinus (iCode * ic)
   if (IS_AOP_A (rightOp))
     {
       loadRegFromAop (m6502_reg_a, rightOp, offset);
-      accopWithAop (sub, leftOp, offset);
+      if (carry)
+        emitcode("sec", "");
+      accopWithAop ("sbc", leftOp, offset);
       accopWithMisc ("nega", "");
       storeRegToAop (m6502_reg_a, AOP (IC_RESULT (ic)), offset++);
       pullOrFreeReg (m6502_reg_a, needpulla);
@@ -4706,7 +4719,9 @@ genMinus (iCode * ic)
         {
           pushReg (m6502_reg_a, TRUE);
           loadRegFromAop (m6502_reg_a, leftOp, offset);
-          emitcode (sub, "1, s");
+          if (carry)
+            emitcode("sec", "");
+          emitcode ("sbc", "1, s");
           m6502_dirtyReg (m6502_reg_a, FALSE);
           regalloc_dry_run_cost += 3;
           pullNull (1);
@@ -4714,7 +4729,9 @@ genMinus (iCode * ic)
       else
         {
           loadRegFromAop (m6502_reg_a, leftOp, offset);
-          accopWithAop (sub, rightOp, offset);
+          if (carry)
+            emitcode("sec", "");
+          accopWithAop ("sbc", rightOp, offset);
         }
       if (size && AOP_TYPE (IC_RESULT (ic)) == AOP_REG && AOP (IC_RESULT (ic))->aopu.aop_reg[offset]->rIdx == A_IDX)
         {
@@ -4724,7 +4741,7 @@ genMinus (iCode * ic)
       else
         storeRegToAop (m6502_reg_a, AOP (IC_RESULT (ic)), offset);
       offset++;
-      sub = "sbc";
+      carry = false;
     }
   if(delayedstore)
     pullReg (m6502_reg_a);
@@ -5760,14 +5777,24 @@ genCmp (iCode * ic, iCode * ifx)
             {
               pushReg (m6502_reg_a, TRUE);
               loadRegFromAop (m6502_reg_a, AOP (left), offset);
-              emitcode (sub, "1, s");
+              if (!strcmp(sub, "sub")) {
+                emitcode ("sec", "");
+                emitcode ("sbc", "1, s");
+              } else {
+                emitcode (sub, "1, s");
+              }
               regalloc_dry_run_cost += 3;
               pullReg (m6502_reg_a);
             }
           else
             {
               loadRegFromAop (m6502_reg_a, AOP (left), offset);
-              accopWithAop (sub, AOP (right), offset);
+              if (!strcmp(sub, "sub")) {
+                emitcode ("sec", "");
+                accopWithAop ("sbc", AOP (right), offset);
+              } else {
+                accopWithAop (sub, AOP (right), offset);
+              }
             }
           m6502_freeReg (m6502_reg_a);
           offset++;
