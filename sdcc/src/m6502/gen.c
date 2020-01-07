@@ -44,14 +44,16 @@ static int pushReg (reg_info * reg, bool freereg);
 static void pullReg (reg_info * reg);
 static void transferAopAop (asmop * srcaop, int srcofs, asmop * dstaop, int dstofs);
 static void adjustStack (int n);
+static bool pushRegIfUsed (reg_info *reg);
+static void pullOrFreeReg (reg_info * reg, bool needpull);
 
 static char *zero = "#0x00";
 static char *one = "#0x01";
 
-//static char *TEMP0 = "(__TEMP+0)";
-static char *TEMP1 = "(__TEMP+1)";
-//static char *TEMP2 = "(__TEMP+2)";
-//static char *TEMP3 = "(__TEMP+3)";
+static char *TEMP0 = "*(__TEMP+0)";
+static char *TEMP1 = "*(__TEMP+1)";
+//static char *TEMP2 = "*(__TEMP+2)";
+//static char *TEMP3 = "*(__TEMP+3)";
 
 unsigned fReturnSizeM6502 = 4;   /* shared with ralloc.c */
 
@@ -143,6 +145,7 @@ transferRegReg (reg_info *sreg, reg_info *dreg, bool freesrc)
   int srcidx;
   int dstidx;
   char error = 0;
+  bool needpula;
 
   /* Nothing to do if no destination. */
   if (!dreg)
@@ -192,11 +195,11 @@ transferRegReg (reg_info *sreg, reg_info *dreg, bool freesrc)
           regalloc_dry_run_cost++;
           break;
         case X_IDX:            /* X to Y */
-          pushReg (m6502_reg_a, FALSE);
+          needpula = pushRegIfUsed (m6502_reg_a);
           emitcode ("txa", "");
           emitcode ("tay", "");
           regalloc_dry_run_cost += 2;
-          pullReg (m6502_reg_a);
+          pullOrFreeReg (m6502_reg_a, needpula);
           break;
         default:
           error = 1;
@@ -210,11 +213,11 @@ transferRegReg (reg_info *sreg, reg_info *dreg, bool freesrc)
           regalloc_dry_run_cost++;
           break;
         case H_IDX:            /* Y to X */
-          pushReg (m6502_reg_a, FALSE);
+          needpula = pushRegIfUsed (m6502_reg_a);
           emitcode ("tya", "");
           emitcode ("tax", "");
           regalloc_dry_run_cost += 2;
-          pullReg (m6502_reg_a);
+          pullOrFreeReg (m6502_reg_a, needpula);
           break;
         default:
           error = 1;
@@ -303,10 +306,12 @@ pushReg (reg_info * reg, bool freereg)
         emitcode ("phx", "");
         regalloc_dry_run_cost++;
       } else {
+        emitcode ("sta", TEMP0); // TODO: only if in use
         emitcode ("txa", "");
         emitcode ("pha", "");
-        regalloc_dry_run_cost += 2;
-        m6502_dirtyReg(m6502_reg_a, FALSE);
+        emitcode ("lda", TEMP0); // TODO: only if in use
+        regalloc_dry_run_cost += 6;
+        m6502_dirtyReg(m6502_reg_a, FALSE); // TODO: doesn't work
       }
       _G.stackPushes++;
       updateCFA ();
@@ -316,10 +321,12 @@ pushReg (reg_info * reg, bool freereg)
         emitcode ("phy", "");
         regalloc_dry_run_cost++;
       } else {
+        emitcode ("sta", TEMP0); // TODO: only if in use
         emitcode ("tya", "");
         emitcode ("pha", "");
-        regalloc_dry_run_cost += 2;
-        m6502_dirtyReg(m6502_reg_a, FALSE);
+        emitcode ("lda", TEMP0); // TODO: only if in use
+        regalloc_dry_run_cost += 6;
+        m6502_dirtyReg(m6502_reg_a, FALSE); // TODO: doesn't work
       }
       regalloc_dry_run_cost++;
       _G.stackPushes++;
@@ -340,6 +347,8 @@ pushReg (reg_info * reg, bool freereg)
     m6502_freeReg (reg);
   return -_G.stackOfs - _G.stackPushes;
 }
+
+static bool pushRegIfUsed (reg_info *reg);
 
 /*--------------------------------------------------------------------------*/
 /* pullReg - Pull register reg off the stack.                               */

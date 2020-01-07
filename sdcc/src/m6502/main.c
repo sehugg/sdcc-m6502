@@ -373,15 +373,12 @@ hasExtBitOp (int op, int size)
 static int
 oclsExpense (struct memmap *oclass)
 {
-  /* The m6502's addressing modes allow access to all storage classes */
-  /* inexpensively (<=0) */
-
   if (IN_DIRSPACE (oclass))     /* direct addressing mode is fastest */
     return -2;
   if (IN_FARSPACE (oclass))     /* extended addressing mode is almost at fast */
     return -1;
-  if (oclass == istack)         /* stack is the slowest, but still faster than */
-    return 0;                   /* trying to copy to a temp location elsewhere */
+  if (oclass == istack)         /* stack is the slowest */
+    return 1;
 
   return 0; /* anything we missed */
 }
@@ -621,7 +618,7 @@ m6502_instructionSize(const char *inst, const char *op1, const char *op2)
           return 1;
         if (op2[0] == 'x')  /* if ,x with offset */
           return 2;
-        if (!strcmp(op1,'a'))  /* accumulator */
+        if (!strcmp(op1, "a"))  /* accumulator */
           return 1;
         return 3;  /* Otherwise, must be ,sp with offset */
         
