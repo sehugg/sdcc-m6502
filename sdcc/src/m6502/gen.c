@@ -1105,20 +1105,7 @@ loadRegFromConst (reg_info * reg, int c)
         {
           if (reg->litConst == c)
             break;
-          if (((reg->litConst + 1) & 0xff) == c)
-            {
-              emitcode ("inca", "");
-              regalloc_dry_run_cost++;
-              break;
-            }
-          if (((reg->litConst - 1) & 0xff) == c)
-            {
-              emitcode ("deca", "");
-              regalloc_dry_run_cost++;
-              break;
-            }
         }
-
       if (m6502_reg_x->isLitConst && m6502_reg_x->litConst == c)
         transferRegReg (m6502_reg_x, reg, FALSE);
       else
@@ -1135,13 +1122,13 @@ loadRegFromConst (reg_info * reg, int c)
             break;
           if (((reg->litConst + 1) & 0xff) == c)
             {
-              emitcode ("incx", "");
+              emitcode ("inx", "");
               regalloc_dry_run_cost++;
               break;
             }
           if (((reg->litConst - 1) & 0xff) == c)
             {
-              emitcode ("decx", "");
+              emitcode ("dex", "");
               regalloc_dry_run_cost++;
               break;
             }
@@ -1157,63 +1144,38 @@ loadRegFromConst (reg_info * reg, int c)
       break;
     case H_IDX:
       c &= 0xff;
-      if (reg->isLitConst && reg->litConst == c)
-	break;
+      if (reg->isLitConst)
+        {
+          if (reg->litConst == c)
+            break;
+          if (((reg->litConst + 1) & 0xff) == c)
+            {
+              emitcode ("iny", "");
+              regalloc_dry_run_cost++;
+              break;
+            }
+          if (((reg->litConst - 1) & 0xff) == c)
+            {
+              emitcode ("dey", "");
+              regalloc_dry_run_cost++;
+              break;
+            }
+        }
 
       if (m6502_reg_a->isLitConst && m6502_reg_a->litConst == c)
         transferRegReg (m6502_reg_a, reg, FALSE);
-      else if (m6502_reg_x->isLitConst && m6502_reg_x->litConst == c)
-        transferRegReg (m6502_reg_x, reg, FALSE);
-      else if (m6502_reg_a->isFree)
-        {
-          loadRegFromConst (m6502_reg_a, c);
-          transferRegReg (m6502_reg_a, m6502_reg_h, TRUE);
-        }
-      else if (m6502_reg_x->isFree)
-        {
-          loadRegFromConst (m6502_reg_hx, c << 8);
-        }
       else
         {
-          pushReg (m6502_reg_x, TRUE);
-          loadRegFromConst (m6502_reg_hx, c << 8);
-          pullReg (m6502_reg_x);
+          emitcode ("ldy", "!immedbyte", c);
+          regalloc_dry_run_cost += 2;
         }
       break;
     case HX_IDX:
       c &= 0xffff;
-      if (reg->isLitConst)
-        {
-          int delta = (c - reg->litConst) & 0xffff;
-          if (delta & 0x8000)
-            delta = -0x8000 + (delta & 0x7fff);
-          if (reg->litConst == c)
-            break;
-          if ((reg->litConst & 0xff) == c)
-            {
-              loadRegFromConst (m6502_reg_h, 0);
-              break;
-            }
-          if ((reg->litConst & 0xff00) == (c & 0xff00))
-            {
-              loadRegFromConst (m6502_reg_x, c & 0xff);
-              break;
-            }
-          if ((delta <= 127) && (delta >= -128))
-            {
-              emitcode ("aix","#%d", delta);
-              regalloc_dry_run_cost += 2;
-              break;
-            }
-        }
-      if (!c)
-        {
-          loadRegFromConst (m6502_reg_h, 0);
-          loadRegFromConst (m6502_reg_x, 0);
-          break;
-        }
-      emitcode ("ldhx", "!immedword", c);
-      regalloc_dry_run_cost += 3;
+      if (reg->isLitConst && reg->litConst == c)
+	break;
+      loadRegFromConst (m6502_reg_x, c);
+      loadRegFromConst (m6502_reg_h, c >> 8);
       break;
     case XA_IDX:
       c &= 0xffff;
