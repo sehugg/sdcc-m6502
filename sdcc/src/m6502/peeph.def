@@ -237,30 +237,6 @@ replace restart {
 %1:
 } if labelRefCountChange(%1 -1)
 
-replace {
-	cmp	#%2
-	beq	%1
-} by {
-	; Peephole 10a   - combined cmp/beq
-	cbeqa	#%2,%1
-}
-
-replace {
-	cmp	*%2
-	beq	%1
-} by {
-	; Peephole 10b   - combined cmp/beq
-	cbeq	*%2,%1
-}
-
-replace {
-        dec     %2,s
-        bne     %1
-} by {
-        ; Peephole 10c   - combined dec/bne
-        dbnz    %2,s,%1
-}
-
 // should be one of the last peepholes
 replace restart {
 %1:
