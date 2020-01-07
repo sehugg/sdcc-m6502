@@ -26,7 +26,6 @@
 #define D(x) do if (options.verboseAsm) { x; } while (0)
 /* Use the DD macro for detailed debugging messages */
 //#define DD(x)
-// TODO
 #define DD(x) x
 
 #include <stdio.h>
@@ -48,6 +47,11 @@ static void adjustStack (int n);
 
 static char *zero = "#0x00";
 static char *one = "#0x01";
+
+//static char *TEMP0 = "(__TEMP+0)";
+static char *TEMP1 = "(__TEMP+1)";
+//static char *TEMP2 = "(__TEMP+2)";
+//static char *TEMP3 = "(__TEMP+3)";
 
 unsigned fReturnSizeM6502 = 4;   /* shared with ralloc.c */
 
@@ -219,10 +223,12 @@ transferRegReg (reg_info *sreg, reg_info *dreg, bool freesrc)
       switch (srcidx)
         {
         case XA_IDX:           /* XA to YX */
-          pushReg (m6502_reg_x, FALSE);
-          pullReg (m6502_reg_h);
+          pushReg (m6502_reg_a, FALSE);
+          emitcode ("txa", "");
+          emitcode ("tay", "");
+          pullReg (m6502_reg_a); // TODO: kill register?
           emitcode ("tax", "");
-          regalloc_dry_run_cost++;
+          regalloc_dry_run_cost += 3;
           break;
         default:
           error = 1;
@@ -233,9 +239,11 @@ transferRegReg (reg_info *sreg, reg_info *dreg, bool freesrc)
         {
         case HX_IDX:           /* HX to XA */
           emitcode ("txa", "");
-          regalloc_dry_run_cost++;
-          pushReg (m6502_reg_h, FALSE);
-          pullReg (m6502_reg_x);
+          pushReg (m6502_reg_a, FALSE);
+          emitcode ("tya", "");
+          emitcode ("tax", "");
+          regalloc_dry_run_cost += 2;
+          pullReg (m6502_reg_a); // TODO: kill register?
           break;
         default:
           error = 1;
@@ -637,29 +645,8 @@ forceload:
   switch (regidx)
     {
     case A_IDX:
-      if (aop->type == AOP_REG)
-        {
-          if (loffset < aop->size)
-            transferRegReg (aop->aopu.aop_reg[loffset], reg, FALSE);
-          else
-            loadRegFromConst (reg, 0); /* TODO: handle sign extension */
-        }
-      else
-        {
-          if (aop->type == AOP_LIT)
-            {
-              loadRegFromConst (reg, byteOfVal (aop->aopu.aop_lit, loffset));
-            }
-          else
-            {
-              const char *l = aopAdrStr (aop, loffset, FALSE);
-              emitcode ("lda", "%s", l);
-              regalloc_dry_run_cost += ((aop->type == AOP_DIR || aop->type == AOP_IMMD || aop->type == AOP_LIT) ? 2 : 3);
-              m6502_dirtyReg (reg, FALSE);
-            }
-        }
-      break;
     case X_IDX:
+    case H_IDX:
       if (aop->type == AOP_REG)
         {
           if (loffset < aop->size)
@@ -676,53 +663,10 @@ forceload:
           else
             {
               const char *l = aopAdrStr (aop, loffset, FALSE);
-              emitcode ("ldx", "%s", l);
+              emitcode (regidx == A_IDX ? "lda" : regidx == X_IDX ? "ldx" : "ldy", "%s", l);
               regalloc_dry_run_cost += ((aop->type == AOP_DIR || aop->type == AOP_IMMD || aop->type == AOP_LIT) ? 2 : 3);
               m6502_dirtyReg (reg, FALSE);
             }
-        }
-      break;
-    case H_IDX:
-       if (aop->type == AOP_LIT)
-         {
-           loadRegFromConst (reg, byteOfVal (aop->aopu.aop_lit, loffset));
-           break;
-         }
-       if (aop->type == AOP_SOF && !(_G.stackOfs + _G.stackPushes + aop->aopu.aop_stk + aop->size - loffset - 1))
-        {
-          pullReg (m6502_reg_h);
-          pushReg (m6502_reg_h, FALSE);
-          break;
-        }
-      if (aop->type == AOP_REG && loffset < aop->size)
-        transferRegReg (aop->aopu.aop_reg[loffset], m6502_reg_h, TRUE);
-      else if (!(aop->op && isOperandVolatile (aop->op, FALSE)) &&  (loffset - 1 >= 0 || aop->type == AOP_LIT) && (aop->type == AOP_LIT || aop->type == AOP_IMMD || IS_M65C02 && aop->type == AOP_EXT)) /* TODO: Allow negative loffset - 1 */
-        {
-          bool pushedx = FALSE;
-          if (!m6502_reg_x->isFree)
-            {
-              pushReg (m6502_reg_x, TRUE);
-              pushedx = TRUE;
-            }
-          loadRegFromAop (m6502_reg_hx, aop, loffset - 1);
-          pullOrFreeReg (m6502_reg_x, pushedx);
-        }
-      else if (m6502_reg_a->isFree)
-        {
-          loadRegFromAop (m6502_reg_a, aop, loffset);
-          transferRegReg (m6502_reg_a, m6502_reg_h, TRUE);
-        }
-      else if (m6502_reg_x->isFree)
-        {
-          loadRegFromAop (m6502_reg_x, aop, loffset);
-          transferRegReg (m6502_reg_x, m6502_reg_h, TRUE);
-        }
-      else
-        {
-          pushReg (m6502_reg_a, TRUE);
-          loadRegFromAop (m6502_reg_a, aop, loffset);
-          transferRegReg (m6502_reg_a, m6502_reg_h, TRUE);
-          pullReg (m6502_reg_a);
         }
       break;
     case HX_IDX:
@@ -1482,7 +1426,7 @@ storeRegSignToUpperAop (reg_info * reg, asmop * aop, int loffset, bool isSigned)
     {
       /* Signed case */
       transferRegReg (reg, m6502_reg_a, FALSE);
-      emitcode ("rola", "");
+      emitcode ("rol", "a");
       emitcode ("lda", "#0");
       emitcode ("sbc", "#0");
       regalloc_dry_run_cost += 5;
@@ -1705,8 +1649,8 @@ rmwWithReg (char *rmwop, reg_info * reg)
 
   if (reg->rIdx == A_IDX)
     {
-      sprintf (rmwaop, "%sa", rmwop);
-      emitcode (rmwaop, "");
+      //sprintf (rmwaop, "%sa", rmwop);
+      emitcode (rmwop, "a");
       regalloc_dry_run_cost++;
       m6502_dirtyReg (m6502_reg_a, FALSE);
     }
@@ -1758,6 +1702,7 @@ rmwWithAop (char *rmwop, asmop * aop, int loffset)
     case AOP_REG:
       rmwWithReg (rmwop, aop->aopu.aop_reg[loffset]);
       break;
+      /* TODO?
     case AOP_EXT:
       needpull = pushRegIfUsed (reg);
       loadRegFromAop (reg, aop, loffset);
@@ -1766,6 +1711,7 @@ rmwWithAop (char *rmwop, asmop * aop, int loffset)
         storeRegToAop (reg, aop, loffset);
       pullOrFreeReg (reg, needpull);
       break;
+      */
     case AOP_DUMMY:
       break;
     case AOP_SOF:
@@ -2379,12 +2325,42 @@ sameRegs (asmop * aop1, asmop * aop2)
           return (aop1->aopu.aop_stk == aop2->aopu.aop_stk);
         case AOP_DIR:
           if (regalloc_dry_run)
-            return FALSE;
+            return FALSE; // TODO: why?
         case AOP_EXT:
           return (!strcmp (aop1->aopu.aop_dir, aop2->aopu.aop_dir));
         }
     }
 
+  return FALSE;
+}
+
+/*-----------------------------------------------------------------*/
+/* aopCanIncDec - asmop is EXT or DIR                              */
+/*-----------------------------------------------------------------*/
+static bool
+aopCanIncDec (asmop * aop)
+{
+  switch (aop->type) {
+    case AOP_DIR:
+    case AOP_EXT:
+      return TRUE;
+  }
+  return FALSE;
+}
+
+/*-----------------------------------------------------------------*/
+/* aopCanShift - asmop is EXT or DIR or A                          */
+/*-----------------------------------------------------------------*/
+static bool
+aopCanShift (asmop * aop)
+{
+  switch (aop->type) {
+    case AOP_REG:
+      return aop->size == 1 && aop->aopu.aop_reg[0] == A_IDX;
+    case AOP_DIR:
+    case AOP_EXT:
+      return TRUE;
+  }
   return FALSE;
 }
 
@@ -4607,7 +4583,7 @@ addSign (operand * result, int offset, int sign)
     {
       if (sign)
         {
-          emitcode ("rola", "");
+          emitcode ("rol", "a");
           emitcode ("lda", "#0");
           emitcode ("sbc", zero);
           m6502_dirtyReg (m6502_reg_a, FALSE);
@@ -4662,10 +4638,12 @@ genMinus (iCode * ic)
   if (IS_AOP_A (rightOp))
     {
       loadRegFromAop (m6502_reg_a, rightOp, offset);
-      if (carry)
-        emitcode("sec", "");
+      // TODO: optimize?
+      emitcode("sec", "");
       accopWithAop ("sbc", leftOp, offset);
-      accopWithMisc ("nega", "");
+      accopWithMisc ("eor", "#0xff");
+      emitcode("clc", "");
+      emitcode("adc", "#1");
       storeRegToAop (m6502_reg_a, AOP (IC_RESULT (ic)), offset++);
       pullOrFreeReg (m6502_reg_a, needpulla);
       goto release;
@@ -6891,7 +6869,7 @@ genRRC (iCode * ic)
      highest order byte of the result */
   offset = AOP_SIZE (result) - 1;
   emitcode ("lda", "#0");
-  emitcode ("rora", "");
+  emitcode ("ror", "a");
   regalloc_dry_run_cost += 3;
   m6502_dirtyReg (m6502_reg_a, FALSE);
   if (resultInA)
@@ -6938,7 +6916,7 @@ genRLC (iCode * ic)
   size = AOP_SIZE (result);
   offset = 0;
 
-  shift = "lsl";
+  shift = "asl";
   if (sameRegs (AOP (IC_LEFT (ic)), AOP (IC_RESULT (ic))))
     {
       while (size--)
@@ -6969,7 +6947,7 @@ genRLC (iCode * ic)
      lowest order byte of the result */
   offset = 0;
   emitcode ("lda", "#0");
-  emitcode ("rola", "");
+  emitcode ("rol", "a");
   regalloc_dry_run_cost += 3;
   m6502_dirtyReg (m6502_reg_a, FALSE);
   if (resultInA)
@@ -7018,6 +6996,7 @@ genGetAbit (iCode * ic)
   shCount %= 8;
   if (AOP_TYPE (result) == AOP_CRY)
     {
+      // TODO: not really carry bit?
       emitcode ("and", "#0x%02x", 1 << shCount);
       regalloc_dry_run_cost += 2;
       m6502_dirtyReg (m6502_reg_a, FALSE);
@@ -7026,39 +7005,38 @@ genGetAbit (iCode * ic)
     {
       switch (shCount)
         {
+        case 4:
+          emitcode ("lsr", "a");
+          regalloc_dry_run_cost++;
+          //fallthrough
         case 3:
-          emitcode ("lsra", "");
+          emitcode ("lsr", "a");
           regalloc_dry_run_cost++;
           //fallthrough
         case 2:
-          emitcode ("lsra", "");
+          emitcode ("lsr", "a");
           regalloc_dry_run_cost++;
           //fallthrough
         case 1:
-          emitcode ("lsra", "");
+          emitcode ("lsr", "a");
           regalloc_dry_run_cost++;
           //fallthrough
         case 0:
           emitcode ("and", "#0x01");
           regalloc_dry_run_cost += 2;
           break;
-        case 4:
-          emitcode ("nsa", "");
-          emitcode ("and", "#0x01");
-          regalloc_dry_run_cost += 3;
-          break;
         case 5:
-          emitcode ("rola", "");
+          emitcode ("rol", "a");
           regalloc_dry_run_cost++;
           //fallthrough
         case 6:
-          emitcode ("rola", "");
+          emitcode ("rol", "a");
           regalloc_dry_run_cost++;
           //fallthrough
         case 7:
-          emitcode ("rola", "");
+          emitcode ("rol", "a");
           emitcode ("lda", "#0");
-          emitcode ("rola", "");
+          emitcode ("rol", "a");
           regalloc_dry_run_cost += 4;
           break;
         }
@@ -7187,53 +7165,6 @@ genSwap (iCode * ic)
   freeAsmop (result, NULL, ic, TRUE);
 }
 
-#if 0
-/*-----------------------------------------------------------------*/
-/* AccRol - rotate left accumulator by known count                 */
-/*-----------------------------------------------------------------*/
-static void
-AccRol (int shCount)
-{
-  shCount &= 0x0007;            // shCount : 0..7
-
-  switch (shCount)
-    {
-    case 0:
-      break;
-    case 1:
-      emitcode ("rola", "");    /* 1 cycle */
-      break;
-    case 2:
-      emitcode ("rola", "");    /* 1 cycle */
-      emitcode ("rola", "");    /* 1 cycle */
-      break;
-    case 3:
-      emitcode ("nsa", "");
-      emitcode ("rora", "");
-      break;
-    case 4:
-      emitcode ("nsa", "");     /* 3 cycles */
-      break;
-    case 5:
-      emitcode ("nsa", "");     /* 3 cycles */
-      emitcode ("rola", "");    /* 1 cycle */
-      break;
-    case 6:
-      emitcode ("nsa", "");     /* 3 cycles */
-      emitcode ("rola", "");    /* 1 cycle */
-      emitcode ("rola", "");    /* 1 cycle */
-      break;
-    case 7:
-      emitcode ("nsa", "");     /* 3 cycles */
-      emitcode ("rola", "");    /* 1 cycle */
-      emitcode ("rola", "");    /* 1 cycle */
-      emitcode ("rola", "");    /* 1 cycle */
-      break;
-    }
-}
-#endif
-
-
 /*-----------------------------------------------------------------*/
 /* AccLsh - left shift accumulator by known count                  */
 /*-----------------------------------------------------------------*/
@@ -7249,32 +7180,17 @@ AccLsh (int shCount)
   /* For shift counts of 6 and 7, the unrolled loop is never optimal.      */
   switch (shCount)
     {
-    case 4:
-      if (optimize.codeSpeed)
-        break;
-      accopWithMisc ("nsa", "");
-      accopWithMisc ("and", "#0xf0");
-      /* total: 5 cycles, 3 bytes */
-      return;
-    case 5:
-      if (optimize.codeSpeed)
-        break;
-      accopWithMisc ("nsa", "");
-      accopWithMisc ("and", "#0xf0");
-      accopWithMisc ("lsla", "");
-      /* total: 6 cycles, 4 bytes */
-      return;
     case 6:
-      accopWithMisc ("rora", "");
-      accopWithMisc ("rora", "");
-      accopWithMisc ("rora", "");
+      accopWithMisc ("ror", "a");
+      accopWithMisc ("ror", "a");
+      accopWithMisc ("ror", "a");
       accopWithMisc ("and", "#0xc0");
       /* total: 5 cycles, 5 bytes */
       return;
     case 7:
-      accopWithMisc ("rora", "");
+      accopWithMisc ("ror", "a");
       accopWithMisc ("lda", "#0");
-      accopWithMisc ("rora", "");
+      accopWithMisc ("ror", "a");
       /* total: 3 cycles, 3 bytes */
       return;
     }
@@ -7282,7 +7198,7 @@ AccLsh (int shCount)
   /* lsla is only 1 cycle and byte, so an unrolled loop is often  */
   /* the fastest (shCount<6) and shortest (shCount<4).            */
   for (i = 0; i < shCount; i++)
-    accopWithMisc ("lsla", "");
+    accopWithMisc ("asl", "a");
 }
 
 
@@ -7298,7 +7214,7 @@ AccSRsh (int shCount)
 
   if (shCount == 7)
     {
-      accopWithMisc ("rola", "");
+      accopWithMisc ("rol", "a");
       accopWithMisc ("lda", "#0");
       accopWithMisc ("sbc", zero);
       /* total: 4 cycles, 4 bytes */
@@ -7306,7 +7222,7 @@ AccSRsh (int shCount)
     }
 
   for (i = 0; i < shCount; i++)
-    accopWithMisc ("asra", "");
+    accopWithMisc ("asr", "a"); // TODO
 }
 
 /*-----------------------------------------------------------------*/
@@ -7330,32 +7246,17 @@ AccRsh (int shCount, bool sign)
   /* For shift counts of 6 and 7, the unrolled loop is never optimal.      */
   switch (shCount)
     {
-    case 4:
-      if (optimize.codeSpeed)
-        break;
-      accopWithMisc ("nsa", "");
-      accopWithMisc ("and", "#0x0f");
-      /* total: 5 cycles, 3 bytes */
-      return;
-    case 5:
-      if (optimize.codeSpeed)
-        break;
-      accopWithMisc ("nsa", "");
-      accopWithMisc ("and", "#0x0f");
-      accopWithMisc ("lsra", "");
-      /* total: 6 cycles, 4 bytes */
-      return;
     case 6:
-      accopWithMisc ("rola", "");
-      accopWithMisc ("rola", "");
-      accopWithMisc ("rola", "");
+      accopWithMisc ("rol", "a");
+      accopWithMisc ("rol", "a");
+      accopWithMisc ("rol", "a");
       accopWithMisc ("and", "#0x03");
       /* total: 5 cycles, 5 bytes */
       return;
     case 7:
-      accopWithMisc ("rola", "");
+      accopWithMisc ("rol", "a");
       accopWithMisc ("lda", "#0");
-      accopWithMisc ("rola", "");
+      accopWithMisc ("rol", "a");
       /* total: 3 cycles, 3 bytes */
       return;
     }
@@ -7363,7 +7264,7 @@ AccRsh (int shCount, bool sign)
   /* lsra is only 1 cycle and byte, so an unrolled loop is often  */
   /* the fastest (shCount<6) and shortest (shCount<4).            */
   for (i = 0; i < shCount; i++)
-    accopWithMisc ("lsra", "");
+    accopWithMisc ("lsr", "a");
 }
 
 
@@ -7384,21 +7285,16 @@ XAccLsh (int shCount)
       loadRegFromConst (m6502_reg_a, 0);
       return;
     }
+    
+  emitcode("stx", TEMP1);
+  regalloc_dry_run_cost += 2;
 
   /* if we can beat 2n cycles or bytes for some special case, do it here */
   switch (shCount)
     {
     case 7:
-      /*          bytes  cycles     reg x      reg a   carry
-       **                          abcd efgh  ijkl mnop   ?
-       **   lsrx       1  1        0abc defg  ijkl mnop   h
-       **   rora       1  1        0abc defg  hijk lmno   p
-       **   tax        1  1        hijk lmno  hijk lmno   p
-       **   clra       1  1        hijk lmno  0000 0000   p
-       **   rora       1  1        hijk lmno  p000 0000   0
-       ** total: 5 cycles, 5 bytes (beats 14 cycles, 14 bytes)
-       */
-      rmwWithReg ("lsr", m6502_reg_x);
+      emitcode("lsr", TEMP1);
+      regalloc_dry_run_cost += 1;
       rmwWithReg ("ror", m6502_reg_a);
       transferRegReg (m6502_reg_a, m6502_reg_x, FALSE);
       loadRegFromConst (m6502_reg_a, 0);
@@ -7413,9 +7309,13 @@ XAccLsh (int shCount)
   /* the fastest and shortest.                                           */
   for (i = 0; i < shCount; i++)
     {
-      rmwWithReg ("lsl", m6502_reg_a);
-      rmwWithReg ("rol", m6502_reg_x);
+      rmwWithReg ("asl", m6502_reg_a);
+      emitcode("rol", TEMP1);
+      regalloc_dry_run_cost += 1;
     }
+
+  emitcode("ldx", TEMP1);
+  regalloc_dry_run_cost += 2;
 }
 
 /*-----------------------------------------------------------------*/
@@ -7428,8 +7328,11 @@ XAccSRsh (int shCount)
 
   shCount &= 0x000f;            // shCount : 0..7
 
+  emitcode("stx", TEMP1);
+  regalloc_dry_run_cost += 2;
+
   /* if we can beat 2n cycles or bytes for some special case, do it here */
-  switch (shCount)
+  if (0) switch (shCount) // TODO
     {
     case 15:
       /*          bytes  cycles     reg x      reg a   carry
@@ -7441,7 +7344,7 @@ XAccSRsh (int shCount)
        **   tax        1  1        aaaa aaaa  aaaa aaaa   a
        ** total: 5 cycles, 5 bytes
        */
-      rmwWithReg ("lsl", m6502_reg_x);
+      rmwWithReg ("asl", m6502_reg_x);
       loadRegFromConst (m6502_reg_a, 0);
       rmwWithReg ("rol", m6502_reg_a);
       rmwWithReg ("neg", m6502_reg_a);
@@ -7468,7 +7371,7 @@ XAccSRsh (int shCount)
        */
       transferRegReg (m6502_reg_x, m6502_reg_a, FALSE);
       AccSRsh (shCount - 8);
-      rmwWithReg ("lsl", m6502_reg_a);
+      rmwWithReg ("asl", m6502_reg_a);
       loadRegFromConst (m6502_reg_x, 0);
       rmwWithReg ("rol", m6502_reg_x);
       rmwWithReg ("neg", m6502_reg_x);
@@ -7483,9 +7386,13 @@ XAccSRsh (int shCount)
   /* the fastest and shortest.                                           */
   for (i = 0; i < shCount; i++)
     {
-      rmwWithReg ("asr", m6502_reg_x);
+      emitcode("lsr", TEMP1);
+      regalloc_dry_run_cost += 1;
       rmwWithReg ("ror", m6502_reg_a);
     }
+
+  emitcode("ldx", TEMP1);
+  regalloc_dry_run_cost += 2;
 }
 
 /*-----------------------------------------------------------------*/
@@ -7504,8 +7411,11 @@ XAccRsh (int shCount, bool sign)
 
   shCount &= 0x000f;            // shCount : 0..f
 
+  emitcode("stx", TEMP1);
+  regalloc_dry_run_cost += 2;
+
   /* if we can beat 2n cycles or bytes for some special case, do it here */
-  switch (shCount)
+  if (0) switch (shCount) // TODO
     {
     case 15:
       /*          bytes  cycles     reg x      reg a   carry
@@ -7517,7 +7427,7 @@ XAccRsh (int shCount, bool sign)
        ** total: 4 cycles, 4 bytes
        */
       loadRegFromConst (m6502_reg_x, 0);
-      rmwWithReg ("lsl", m6502_reg_x);
+      rmwWithReg ("asl", m6502_reg_x);
       rmwWithReg ("rol", m6502_reg_a);
       loadRegFromConst (m6502_reg_a, 0);
       return;
@@ -7534,9 +7444,9 @@ XAccRsh (int shCount, bool sign)
        ** total: 6 cycles, 6 bytes
        */
       loadRegFromConst (m6502_reg_x, 0);
-      rmwWithReg ("lsl", m6502_reg_x);
+      rmwWithReg ("asl", m6502_reg_x);
       rmwWithReg ("rol", m6502_reg_a);
-      rmwWithReg ("lsl", m6502_reg_x);
+      rmwWithReg ("asl", m6502_reg_x);
       rmwWithReg ("rol", m6502_reg_a);
       loadRegFromConst (m6502_reg_a, 0);
       return;
@@ -7562,7 +7472,7 @@ XAccRsh (int shCount, bool sign)
        **   rolx       1  1        0000 000a  bcde fghi   0
        ** total: 5 cycles, 5 bytes (beats 14 cycles, 14 bytes)
        */
-      rmwWithReg ("lsl", m6502_reg_a);
+      rmwWithReg ("asl", m6502_reg_a);
       transferRegReg (m6502_reg_x, m6502_reg_a, FALSE);
       rmwWithReg ("rol", m6502_reg_a);
       loadRegFromConst (m6502_reg_x, 0);
@@ -7590,9 +7500,12 @@ XAccRsh (int shCount, bool sign)
   /* the fastest and shortest.                                           */
   for (i = 0; i < shCount; i++)
     {
-      rmwWithReg ("lsr", m6502_reg_x);
+      emitcode("lsr", TEMP1);
+      regalloc_dry_run_cost += 2;
       rmwWithReg ("ror", m6502_reg_a);
     }
+  emitcode("ldx", TEMP1);
+  regalloc_dry_run_cost += 2;
 
 }
 
@@ -7603,12 +7516,21 @@ XAccRsh (int shCount, bool sign)
 static void
 shiftL1Left2Result (operand * left, int offl, operand * result, int offr, int shCount)
 {
-  bool needpulla = pushRegIfSurv (m6502_reg_a);
-  loadRegFromAop (m6502_reg_a, AOP (left), offl);
-  /* shift left accumulator */
-  AccLsh (shCount);
-  storeRegToAop (m6502_reg_a, AOP (result), offr);
-  pullOrFreeReg (m6502_reg_a, needpulla);
+  // TODO: shift > 2?
+  if (sameRegs (AOP (left), AOP (result)) && aopCanShift(AOP(left)) && offr == offl)
+    {
+      while (shCount--)
+        rmwWithAop ("asl", AOP (result), 0);
+    }
+  else
+    {
+      bool needpulla = pushRegIfSurv (m6502_reg_a);
+      loadRegFromAop (m6502_reg_a, AOP (left), offl);
+      /* shift left accumulator */
+      AccLsh (shCount);
+      storeRegToAop (m6502_reg_a, AOP (result), offr);
+      pullOrFreeReg (m6502_reg_a, needpulla);
+    }
 }
 
 /*-----------------------------------------------------------------*/
@@ -7657,7 +7579,7 @@ shiftL2Left2Result (operand * left, int offl, operand * result, int offr, int sh
     default:
       for (i = 0; i < shCount; i++)
         {
-          rmwWithReg ("lsl", m6502_reg_a);
+          rmwWithReg ("asl", m6502_reg_a);
           rmwWithReg ("rol", m6502_reg_x);
         }
     }
@@ -7715,7 +7637,7 @@ genlshTwo (operand * result, operand * left, int shCount)
   if (shCount >= 8)
     {
       shCount -= 8;
-
+      // TODO
       needpulla = pushRegIfSurv (m6502_reg_a);
       if (size > 1)
         {
@@ -7728,6 +7650,14 @@ genlshTwo (operand * result, operand * left, int shCount)
     }
 
   /*  1 <= shCount <= 7 */
+  // TODO: count > 2 efficient?
+  else if (sameRegs (AOP (left), AOP (result)) && aopCanShift(AOP(result)) && shCount <= 4)
+    {
+      while (shCount--) {
+        rmwWithAop ("asl", AOP (result), 0);
+        rmwWithAop ("rol", AOP (result), 1);
+      }
+    }
   else
     {
       needpulla = pushRegIfSurv (m6502_reg_a);
@@ -7757,7 +7687,7 @@ shiftLLong (operand * left, operand * result, int offr)
   needpulx = pushRegIfUsed (m6502_reg_x);
 
   loadRegFromAop (m6502_reg_xa, AOP (left), LSB);
-  rmwWithReg ("lsl", m6502_reg_a);
+  rmwWithReg ("asl", m6502_reg_a);
   rmwWithReg ("rol", m6502_reg_x);
 
   if (offr == LSB)
@@ -8038,7 +7968,7 @@ genLeftShift (iCode * ic)
   if (!regalloc_dry_run)
     emitLabel (tlbl);
 
-  shift = "lsl";
+  shift = "asl";
   for (offset = 0; offset < size; offset++)
     {
       rmwWithAop (shift, AOP (result), offset);
@@ -8103,6 +8033,14 @@ genrshTwo (operand * result, operand * left, int shCount, int sign)
     }
 
   /*  1 <= shCount <= 7 */
+  // TODO: count > 2 efficient?
+  else if (sameRegs (AOP (left), AOP (result)) && aopCanShift(AOP(result)) && shCount <= 4 && !sign)
+    {
+      while (shCount--) {
+        rmwWithAop ("lsr", AOP (result), 1);
+        rmwWithAop ("ror", AOP (result), 0);
+      }
+    }
   else
     {
       needpulla = pushRegIfSurv (m6502_reg_a);
@@ -8129,7 +8067,7 @@ shiftRLong (operand * left, int offl, operand * result, int sign)
     {
       loadRegFromAop (m6502_reg_xa, AOP (left), MSB24);
       if (sign)
-        rmwWithReg ("asr", m6502_reg_x);
+        rmwWithReg ("asr", m6502_reg_x); // TODO
       else
         rmwWithReg ("lsr", m6502_reg_x);
       rmwWithReg ("ror", m6502_reg_a);
@@ -8140,7 +8078,7 @@ shiftRLong (operand * left, int offl, operand * result, int sign)
     {
       loadRegFromAop (m6502_reg_a, AOP (left), MSB32);
       if (sign)
-        rmwWithReg ("asr", m6502_reg_a);
+        rmwWithReg ("asr", m6502_reg_a); // TODO
       else
         rmwWithReg ("lsr", m6502_reg_a);
       loadRegFromAop (m6502_reg_x, AOP (left), MSB24);
@@ -8443,7 +8381,7 @@ genRightShift (iCode * ic)
   if (!regalloc_dry_run)
     emitLabel (tlbl);
 
-  shift = sign ? "asr" : "lsr";
+  shift = sign ? "asr" : "lsr"; // TODO
   for (offset = size - 1; offset >= 0; offset--)
     {
       rmwWithAop (shift, AOP (result), offset);
@@ -8630,7 +8568,7 @@ finish:
       else
         {
           /* signed bitfield: sign extension with 0x00 or 0xff */
-          emitcode ("rola", "");
+          emitcode ("rol", "a");
           emitcode ("lda", "#0");
           emitcode ("sbc", zero);
           regalloc_dry_run_cost += 5;
@@ -8845,7 +8783,7 @@ finish:
             }
 
           /* signed bitfield: sign extension with 0x00 or 0xff */
-          emitcode ("rola", "");
+          emitcode ("rol", "a");
           emitcode ("lda", "#0");
           emitcode ("sbc", zero);
           regalloc_dry_run_cost += 5;
@@ -9335,7 +9273,7 @@ genPackBitsImmed (operand * result, operand * left, sym_link * etype, operand * 
 
           needpulla = pushRegIfSurv (m6502_reg_a);
           loadRegFromAop (m6502_reg_a, AOP (right), 0);
-          emitcode ("lsra", "");
+          emitcode ("lsr", "a");
           regalloc_dry_run_cost++;
           emitBranch ("bcs", tlbl1);
           emitcode ("bclr", "#%d,%s", bstr, aopAdrStr (derefaop, 0, FALSE));
@@ -10094,7 +10032,7 @@ genCast (iCode * ic)
                 pushReg(m6502_reg_a, FALSE);
               if (AOP (result)->aopu.aop_reg[0] != m6502_reg_a)
                 loadRegFromAop (m6502_reg_a, AOP (right), 0);
-              accopWithMisc ("rola", "");
+              accopWithMisc ("rol", "a");
               accopWithMisc ("lda", "#0");
               accopWithMisc ("sbc", zero);
               storeRegToAop (m6502_reg_a, AOP (result), 1);
@@ -10176,7 +10114,7 @@ genCast (iCode * ic)
     }
   else if (size)
     {
-      accopWithMisc ("rola", "");
+      accopWithMisc ("rol", "a");
       accopWithMisc ("lda", "#0");
       accopWithMisc ("sbc", zero);
       while (size--)

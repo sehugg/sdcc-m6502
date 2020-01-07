@@ -214,6 +214,8 @@ _m6502_genAssemblerPreamble (FILE * of)
   fprintf (of, "\t.area %s\n",port->mem.xinit_name);
   fprintf (of, "\t.area %s\n",port->mem.const_name);
   fprintf (of, "\t.area %s\n",port->mem.data_name);
+  fprintf (of, "\t.globl __TEMP\n");
+  fprintf (of, "\t.ds 4\n");
   fprintf (of, "\t.area %s\n",port->mem.overlay_name);
   fprintf (of, "\t.area %s\n",port->mem.xdata_name);
   fprintf (of, "\t.area %s\n",port->mem.xidata_name);
@@ -357,7 +359,7 @@ hasExtBitOp (int op, int size)
 {
   if (op == RRC
       || op == RLC
-      || (op == SWAP && size <= 2)
+      //|| (op == SWAP && size <= 2)
       || op == GETABIT
       || op == GETBYTE
       || op == GETWORD
@@ -619,6 +621,8 @@ m6502_instructionSize(const char *inst, const char *op1, const char *op2)
           return 1;
         if (op2[0] == 'x')  /* if ,x with offset */
           return 2;
+        if (!strcmp(op1,'a'))  /* accumulator */
+          return 1;
         return 3;  /* Otherwise, must be ,sp with offset */
         
       case M6502OP_STD: /* standard instruction */
@@ -846,7 +850,7 @@ PORT m6502_port =
     1           /* sp is offset by 1 from last item pushed */
   },
   {
-    5, FALSE
+    5, FALSE // TODO: 5 max shift?
   },
   {
     m6502_emitDebuggerSymbol,
