@@ -783,6 +783,7 @@ AC_DO_PORT(pdk13,    pdk,    PDK13,    [Excludes the PDK13 port])
 AC_DO_PORT(pdk14,    pdk,    PDK14,    [Excludes the PDK14 port])
 AC_DO_PORT(pdk15,    pdk,    PDK15,    [Excludes the PDK15 port])
 AC_DO_PORT_ENABLER(pdk16,    pdk,    PDK16,    [Includes the PDK16 port])
+AC_DO_PORT(m6502,    m6502,  M6502,    [Excludes the M6502 port])
 
 # Unsupported targets
 ####AC_DO_PORT_ENABLER(avr,   avr,   AVR,   [Includes the AVR port (disabled by default)])
@@ -839,7 +840,13 @@ AC_CONFIG_FILES([doc/Makefile])
 
 ####test $OPT_DISABLE_AVR = 0 && AC_CONFIG_FILES([src/avr/Makefile])
 
-if test $OPT_DISABLE_DS390 = 0 || test $OPT_DISABLE_DS400; then
+if test $OPT_DISABLE_M6502 = 0 || test $OPT_DISABLE_M65C02 = 0; then
+  AC_CONFIG_FILES([src/m6502/Makefile
+                   sdas/as6500/Makefile])
+fi
+
+
+if test $OPT_DISABLE_DS390 = 0 || test $OPT_DISABLE_DS400 = 0; then
   AC_CONFIG_FILES([src/ds390/Makefile
                    sdas/as8xcxxx/Makefile])
   test $OPT_DISABLE_DEVICE_LIB = 0 && AC_CONFIG_FILES([device/lib/ds390/Makefile

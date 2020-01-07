@@ -23,6 +23,11 @@ SDCC_EXTRA      = support/regression support/valdiag
 SDCC_PACKIHX    = support/packihx
 SDCC_SDBINUTILS = support/sdbinutils
 
+ifneq ($(OPT_DISABLE_M6502)$(OPT_DISABLE_M65C02), 11)
+SDCC_AS        += sdas/as6500
+SDCC_LD        += sdcc-ldz80
+endif
+
 ifneq ($(OPT_DISABLE_HC08)$(OPT_DISABLE_S08), 11)
 SDCC_AS        += sdas/as6808
 SDCC_LD        += sdcc-ld6808

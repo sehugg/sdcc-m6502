@@ -640,6 +640,7 @@ OPT_DISABLE_PACKIHX
 OPT_DISABLE_DEVICE_LIB
 OPT_DISABLE_UCSIM
 OPT_DISABLE_AVR
+OPT_DISABLE_M6502
 OPT_DISABLE_PDK16
 OPT_DISABLE_PDK15
 OPT_DISABLE_PDK14
@@ -775,6 +776,7 @@ enable_pdk13_port
 enable_pdk14_port
 enable_pdk15_port
 enable_pdk16_port
+enable_m6502_port
 enable_ucsim
 enable_device_lib
 enable_packihx
@@ -1461,6 +1463,7 @@ Optional Features:
   --disable-pdk14-port    Excludes the PDK14 port
   --disable-pdk15-port    Excludes the PDK15 port
   --enable-pdk16-port     Includes the PDK16 port
+  --disable-m6502-port    Excludes the M6502 port
   --disable-ucsim         Disables configuring and building of ucsim
   --disable-device-lib    Disables building device libraries
   --disable-packihx       Disables building packihx
@@ -8296,6 +8299,32 @@ _ACEOF
   fi
 
 
+  # Check whether --enable-m6502-port was given.
+if test "${enable_m6502_port+set}" = set; then :
+  enableval=$enable_m6502_port;
+fi
+
+
+  if test "$enable_m6502_port" = "no"; then
+    OPT_DISABLE_M6502=1
+  else
+    enable_m6502_port="yes"
+    OPT_DISABLE_M6502=0
+  fi
+
+
+cat >>confdefs.h <<_ACEOF
+#define OPT_DISABLE_M6502 $OPT_DISABLE_M6502
+_ACEOF
+
+
+
+  echo m6502 >>ports.all
+  if test $OPT_DISABLE_M6502 = 0; then
+    echo m6502 >>ports.build
+  fi
+
+
 # Unsupported targets
 ####AC_DO_PORT_ENABLER(avr,   avr,   AVR,   [Includes the AVR port (disabled by default)])
 OPT_DISABLE_AVR=1
@@ -8829,7 +8858,13 @@ ac_config_files="$ac_config_files doc/Makefile"
 
 ####test $OPT_DISABLE_AVR = 0 && AC_CONFIG_FILES([src/avr/Makefile])
 
-if test $OPT_DISABLE_DS390 = 0 || test $OPT_DISABLE_DS400; then
+if test $OPT_DISABLE_M6502 = 0 || test $OPT_DISABLE_M65C02 = 0; then
+  ac_config_files="$ac_config_files src/m6502/Makefile sdas/as6500/Makefile"
+
+fi
+
+
+if test $OPT_DISABLE_DS390 = 0 || test $OPT_DISABLE_DS400 = 0; then
   ac_config_files="$ac_config_files src/ds390/Makefile sdas/as8xcxxx/Makefile"
 
   test $OPT_DISABLE_DEVICE_LIB = 0 && ac_config_files="$ac_config_files device/lib/ds390/Makefile device/lib/ds400/Makefile"
@@ -9649,6 +9684,8 @@ do
     "sdccconf.h") CONFIG_HEADERS="$CONFIG_HEADERS sdccconf.h:sdccconf_in.h" ;;
     "sdas/linksrc/asxxxx_config.h") CONFIG_HEADERS="$CONFIG_HEADERS sdas/linksrc/asxxxx_config.h" ;;
     "doc/Makefile") CONFIG_FILES="$CONFIG_FILES doc/Makefile" ;;
+    "src/m6502/Makefile") CONFIG_FILES="$CONFIG_FILES src/m6502/Makefile" ;;
+    "sdas/as6500/Makefile") CONFIG_FILES="$CONFIG_FILES sdas/as6500/Makefile" ;;
     "src/ds390/Makefile") CONFIG_FILES="$CONFIG_FILES src/ds390/Makefile" ;;
     "sdas/as8xcxxx/Makefile") CONFIG_FILES="$CONFIG_FILES sdas/as8xcxxx/Makefile" ;;
     "device/lib/ds390/Makefile") CONFIG_FILES="$CONFIG_FILES device/lib/ds390/Makefile" ;;
