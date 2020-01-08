@@ -843,6 +843,8 @@ AC_CONFIG_FILES([doc/Makefile])
 if test $OPT_DISABLE_M6502 = 0 || test $OPT_DISABLE_M65C02 = 0; then
   AC_CONFIG_FILES([src/m6502/Makefile
                    sdas/as6500/Makefile])
+  test $OPT_DISABLE_DEVICE_LIB = 0 && AC_CONFIG_FILES([device/lib/m6502/Makefile
+                                                       device/lib/m65c02/Makefile])
 fi
 
 
@@ -1025,6 +1027,8 @@ sdcc ${VERSION} is now configured for
     pdk14               ${enable_pdk14_port}
     pdk15               ${enable_pdk15_port}
     pdk16               ${enable_pdk16_port}
+    m6502		${enable_m6502_port}
+    m65c02		${enable_m65c02_port}
 
   Disable non-free lib: ${OPT_DISABLE_NON_FREE}
   Disable packihx:      ${OPT_DISABLE_PACKIHX}

@@ -360,9 +360,10 @@ hasExtBitOp (int op, int size)
   if (op == RRC
       || op == RLC
       //|| (op == SWAP && size <= 2)
-      || op == GETABIT
-      || op == GETBYTE
-      || op == GETWORD
+      // TODO?
+      //|| op == GETABIT
+      //|| op == GETBYTE
+      //|| op == GETWORD
      )
     return TRUE;
   else
@@ -405,29 +406,6 @@ m6502_dwarfRegNum (const struct reg_info *reg)
 static bool
 _hasNativeMulFor (iCode *ic, sym_link *left, sym_link *right)
 {
-  int result_size = IS_SYMOP (IC_RESULT(ic)) ? getSize (OP_SYM_TYPE (IC_RESULT(ic))) : 4;
-  //printf("%c %d - %d %d %d %d \n", ic->op, result_size, IS_CHAR (right), IS_UNSIGNED (right), IS_CHAR (left), IS_UNSIGNED (left));
-
-  if (ic->op != '*')
-    return FALSE; // no division, no modulo
-  /* 8x8 unsigned multiplication code is shorter than
-     call overhead for the multiplication routine. */
-  if (IS_CHAR (right) && IS_UNSIGNED (right) && IS_CHAR (left) && IS_UNSIGNED (left))
-    return TRUE;
-  /* Same for any multiplication with 8 bit result. */
-  if (result_size == 1)
-    return TRUE;
-  /* any 16-bit literal is OK (TODO?) */
-  /*
-  sym_link *test = NULL;
-  if (IS_LITERAL (left))
-    test = left;
-  else if (IS_LITERAL (right))
-    test = right;
-  if (test && getSize (test) <= 2)
-    return TRUE;
-  */
-
   return FALSE;
 }
 

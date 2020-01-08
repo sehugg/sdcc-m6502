@@ -141,6 +141,14 @@ FBYNAME (portIsDS390)
 }
 
 /*-----------------------------------------------------------------*/
+/* portIs65C02 - return true if port is 65C02                      */
+/*-----------------------------------------------------------------*/
+FBYNAME (portIs65C02)
+{
+    return (strcmp(port->target,"m65c02") == 0);
+}
+
+/*-----------------------------------------------------------------*/
 /* flat24bitMode - will check to see if we are in flat24 mode      */
 /*-----------------------------------------------------------------*/
 FBYNAME (flat24bitMode)
@@ -1560,6 +1568,9 @@ ftab[] =                                            // sorted on the number of t
   },
   {
     "portIsDS390", portIsDS390                      // 5
+  },
+  {
+    "portIs65C02", portIs65C02
   },
   {
     "labelIsUncondJump", labelIsUncondJump          // 4

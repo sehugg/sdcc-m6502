@@ -42,6 +42,21 @@ replace {
 }
 
 replace {
+	dbnzx	%1
+} by {
+	dex
+	bne	%1
+}
+
+replace {
+	dbnza	%1
+} by {
+	clc
+	sbc	#0x01
+	bne	%1
+}
+
+replace {
 	bcs	%1
 	jmp	%5
 %1:
@@ -102,66 +117,6 @@ replace {
 } if labelInRange(%5), labelRefCountChange(%1 -1)
 
 replace {
-	bls	%1
-	jmp	%5
-%1:
-} by {
-	; Peephole 2g	- eliminated jmp
-	bhi	%5
-%1:
-} if labelInRange(%5), labelRefCountChange(%1 -1)
-
-replace {
-	bhi	%1
-	jmp	%5
-%1:
-} by {
-	; Peephole 2h	- eliminated jmp
-	bls	%5
-%1:
-} if labelInRange(%5), labelRefCountChange(%1 -1)
-
-replace {
-	ble	%1
-	jmp	%5
-%1:
-} by {
-	; Peephole 2i	- eliminated jmp
-	bgt	%5
-%1:
-} if labelInRange(%5), labelRefCountChange(%1 -1)
-
-replace {
-	bgt	%1
-	jmp	%5
-%1:
-} by {
-	; Peephole 2j	- eliminated jmp
-	ble	%5
-%1:
-} if labelInRange(%5), labelRefCountChange(%1 -1)
-
-replace {
-	bge	%1
-	jmp	%5
-%1:
-} by {
-	; Peephole 2k	- eliminated jmp
-	blt	%5
-%1:
-} if labelInRange(%5), labelRefCountChange(%1 -1)
-
-replace {
-	blt	%1
-	jmp	%5
-%1:
-} by {
-	; Peephole 2l	- eliminated jmp
-	bge	%5
-%1:
-} if labelInRange(%5), labelRefCountChange(%1 -1)
-
-replace {
 	bmi     %1
 	jmp     %5
 %1:
@@ -181,12 +136,32 @@ replace {
 %1:
 } if labelInRange(%5), labelRefCountChange(%1 -1)
 
+replace {
+	bvs     %1
+	jmp     %5
+%1:
+} by {
+	; Peephole 2m   - eliminated jmp
+	bvc     %5
+%1:
+} if labelInRange(%5), labelRefCountChange(%1 -1)
+
+replace {
+	bvc     %1
+	jmp     %5
+%1:
+} by {
+	; Peephole 2n   - eliminated jmp
+	bvs     %5
+%1:
+} if labelInRange(%5), labelRefCountChange(%1 -1)
+
 replace restart {
 	jmp	%5
 } by {
 	; Peephole 3	- shortened jmp to bra
 	bra	%5
-} if labelInRange(%5) && IS_M65C02
+} if portIs65C02 && labelInRange(%5)
 
 replace {
 	lda	%1
