@@ -488,5 +488,8 @@ extern PORT pdk15_port;
 #if !OPT_DISABLE_M6502
 extern PORT m6502_port;
 #endif
+#if !OPT_DISABLE_M65C02
+extern PORT m65c02_port;
+#endif
 
 #endif /* PORT_INCLUDE */

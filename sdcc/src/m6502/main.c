@@ -405,7 +405,30 @@ m6502_dwarfRegNum (const struct reg_info *reg)
 static bool
 _hasNativeMulFor (iCode *ic, sym_link *left, sym_link *right)
 {
-  return 0;
+  int result_size = IS_SYMOP (IC_RESULT(ic)) ? getSize (OP_SYM_TYPE (IC_RESULT(ic))) : 4;
+  //printf("%c %d - %d %d %d %d \n", ic->op, result_size, IS_CHAR (right), IS_UNSIGNED (right), IS_CHAR (left), IS_UNSIGNED (left));
+
+  if (ic->op != '*')
+    return FALSE; // no division, no modulo
+  /* 8x8 unsigned multiplication code is shorter than
+     call overhead for the multiplication routine. */
+  if (IS_CHAR (right) && IS_UNSIGNED (right) && IS_CHAR (left) && IS_UNSIGNED (left))
+    return TRUE;
+  /* Same for any multiplication with 8 bit result. */
+  if (result_size == 1)
+    return TRUE;
+  /* any 16-bit literal is OK (TODO?) */
+  /*
+  sym_link *test = NULL;
+  if (IS_LITERAL (left))
+    test = left;
+  else if (IS_LITERAL (right))
+    test = right;
+  if (test && getSize (test) <= 2)
+    return TRUE;
+  */
+
+  return FALSE;
 }
 
 typedef struct asmLineNode
@@ -802,6 +825,7 @@ PORT m6502_port =
     _m6502_defaultRules,
     m6502_getInstructionSize,
   },
+  // TODO: banked func ptr?
   {
     /* Sizes: char, short, int, long, long long, near ptr, far ptr, gptr, func ptr, banked func ptr, bit, float */
     1, 2, 2, 4, 8, 2, 2, 2, 2, 0, 1, 4

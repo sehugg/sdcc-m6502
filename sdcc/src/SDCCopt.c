@@ -3204,7 +3204,7 @@ eBBlockFromiCode (iCode *ic)
   ic = iCodeLabelOptimize (iCodeFromeBBlock (ebbi->bbOrder, ebbi->count));
   shortenLiveRanges (ic, ebbi);
   guessCounts (ic, ebbi);
-  if (optimize.lospre && (TARGET_Z80_LIKE || TARGET_HC08_LIKE || TARGET_IS_STM8)) /* For mcs51, we get a code size regression with lospre enabled, since the backend can't deal well with the added temporaries */
+  if (optimize.lospre && (TARGET_Z80_LIKE || TARGET_HC08_LIKE || TARGET_IS_STM8 || TARGET_M6502_LIKE)) /* For mcs51, we get a code size regression with lospre enabled, since the backend can't deal well with the added temporaries */
     {
       lospre (ic, ebbi);
       if (options.dump_i_code)
