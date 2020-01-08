@@ -52,20 +52,20 @@ static char *one = "#0x01";
 
 static char *TEMP0 = "*(__TEMP+0)";
 static char *TEMP1 = "*(__TEMP+1)";
-//static char *TEMP2 = "*(__TEMP+2)";
-//static char *TEMP3 = "*(__TEMP+3)";
+static char *TEMP2 = "*(__TEMP+2)";
+static char *TEMP3 = "*(__TEMP+3)";
+
+static char *BASEPTR = "*(__BASEPTR)";
+
+const int STACK_TOP = 0x100 - 1; // TODO: use symbols
 
 unsigned fReturnSizeM6502 = 4;   /* shared with ralloc.c */
 
 
 static struct
 {
-  short hxPushed;
-  short accInUse;
-  short nRegsSaved;
   int stackOfs;
   int stackPushes;
-  short regsinuse;
   set *sendSet;
   int tsxStackPushes;
 }
@@ -264,10 +264,12 @@ transferRegReg (reg_info *sreg, reg_info *dreg, bool freesrc)
   if (freesrc)
     m6502_freeReg (sreg);
 
-  dreg->aop = sreg->aop;
-  dreg->aopofs = sreg->aopofs;
+  //dreg->aop = sreg->aop;
+  //dreg->aopofs = sreg->aopofs;
   dreg->isFree = FALSE;
-  m6502_dirtyReg (dreg, FALSE);
+  dreg->isLitConst = sreg->isLitConst;
+  dreg->litConst = sreg->litConst;
+  //m6502_dirtyReg (dreg, FALSE);
   m6502_useReg (dreg);
 }
 
@@ -284,6 +286,83 @@ updateCFA (void)
 
   if (options.debug && !regalloc_dry_run)
     debugFile->writeFrameAddress (NULL, m6502_reg_sp, 1 + _G.stackOfs + _G.stackPushes);
+}
+
+static bool
+storeRegTemp (reg_info * reg, bool always) {
+
+  if (reg->isFree && !always)
+    return false;
+    
+  int regidx = reg->rIdx;
+  switch (regidx) {
+    case A_IDX:
+      emitcode ("sta", TEMP0);
+      regalloc_dry_run_cost += 2;
+      break;
+    case X_IDX:
+      emitcode ("stx", TEMP0);
+      regalloc_dry_run_cost += 2;
+      break;
+    case H_IDX:
+      emitcode ("sty", TEMP0);
+      regalloc_dry_run_cost += 2;
+      break;
+    case HX_IDX:
+      emitcode ("stx", TEMP0);
+      emitcode ("sty", TEMP1);
+      regalloc_dry_run_cost += 4;
+      break;
+    case XA_IDX:
+      emitcode ("sta", TEMP0);
+      emitcode ("stx", TEMP1);
+      regalloc_dry_run_cost += 4;
+      break;
+    default:
+      wassertl (0, "storeRegTemp()");
+      break;
+  }
+  return true;
+}
+
+static void
+loadRegTemp (reg_info * reg, bool always) {
+
+  if (reg->isFree && !always) {
+    // assume we clobbered it
+    if (!always)
+      m6502_dirtyReg (reg, FALSE);
+    return;
+  }
+    
+  int regidx = reg->rIdx;
+  switch (regidx) {
+    case A_IDX:
+      emitcode ("lda", TEMP0);
+      regalloc_dry_run_cost += 2;
+      break;
+    case X_IDX:
+      emitcode ("ldx", TEMP0);
+      regalloc_dry_run_cost += 2;
+      break;
+    case H_IDX:
+      emitcode ("ldy", TEMP0);
+      regalloc_dry_run_cost += 2;
+      break;
+    case HX_IDX:
+      emitcode ("ldx", TEMP0);
+      emitcode ("ldy", TEMP1);
+      regalloc_dry_run_cost += 4;
+      break;
+    case XA_IDX:
+      emitcode ("lda", TEMP0);
+      emitcode ("ldx", TEMP1);
+      regalloc_dry_run_cost += 4;
+      break;
+    default:
+      wassertl (0, "loadRegTemp()");
+      break;
+  }
 }
 
 /*--------------------------------------------------------------------------*/
@@ -310,12 +389,11 @@ pushReg (reg_info * reg, bool freereg)
         emitcode ("phx", "");
         regalloc_dry_run_cost++;
       } else {
-        emitcode ("sta", TEMP0); // TODO: only if in use
+        storeRegTemp (m6502_reg_a, FALSE);
         emitcode ("txa", "");
         emitcode ("pha", "");
-        emitcode ("lda", TEMP0); // TODO: only if in use
-        regalloc_dry_run_cost += 6;
-        m6502_dirtyReg(m6502_reg_a, FALSE); // TODO: doesn't work
+        regalloc_dry_run_cost += 2;
+        loadRegTemp (m6502_reg_a, FALSE);
       }
       _G.stackPushes++;
       updateCFA ();
@@ -325,18 +403,11 @@ pushReg (reg_info * reg, bool freereg)
         emitcode ("phy", "");
         regalloc_dry_run_cost++;
       } else {
-        if (!m6502_reg_a->isDead) {
-          emitcode ("sta", TEMP0);
-          regalloc_dry_run_cost += 2;
-        }
+        storeRegTemp (m6502_reg_a, FALSE);
         emitcode ("tya", "");
         emitcode ("pha", "");
         regalloc_dry_run_cost += 2;
-        if (!m6502_reg_a->isDead) {
-          emitcode ("lda", TEMP0);
-          regalloc_dry_run_cost += 2;
-        }
-        m6502_dirtyReg(m6502_reg_a, FALSE);
+        loadRegTemp (m6502_reg_a, FALSE);
       }
       regalloc_dry_run_cost++;
       _G.stackPushes++;
@@ -428,39 +499,6 @@ pullNull (int n)
 }
 
 /*--------------------------------------------------------------------------*/
-/* pushConst - Push a constant byte value onto stack                        */
-/*--------------------------------------------------------------------------*/
-static void
-pushConst (int c)
-{
-  if (m6502_reg_a->isFree)
-    {
-      loadRegFromConst (m6502_reg_a, c);
-      pushReg (m6502_reg_a, TRUE);
-    }
-  else if (m6502_reg_x->isFree)
-    {
-      loadRegFromConst (m6502_reg_x, c);
-      pushReg (m6502_reg_x, TRUE);
-    }
-  else if (m6502_reg_h->isFree)
-    {
-      loadRegFromConst (m6502_reg_h, c);
-      pushReg (m6502_reg_h, TRUE);
-    }
-  else
-    {
-     // TODO: remove
-      pushReg (m6502_reg_a, FALSE);
-      pushReg (m6502_reg_a, FALSE);
-      loadRegFromConst (m6502_reg_a, c);
-      emitcode ("sta", "2,s");
-      regalloc_dry_run_cost += 3;
-      pullReg (m6502_reg_a);
-    }
-}
-
-/*--------------------------------------------------------------------------*/
 /* pushRegIfUsed - Push register reg if marked in use. Returns true if the  */
 /*                 push was performed, false otherwise.                     */
 /*--------------------------------------------------------------------------*/
@@ -511,47 +549,60 @@ pullOrFreeReg (reg_info * reg, bool needpull)
 static void
 adjustStack (int n)
 {
-  while (n)
-    {
-      if (n > 127)
-        {
-          emitcode ("ais", "#127");
-          regalloc_dry_run_cost += 2;
-          n -= 127;
-          _G.stackPushes -= 127;
-          updateCFA ();
-        }
-      else if (n < -128)
-        {
-          emitcode ("ais", "#-128");
-          regalloc_dry_run_cost += 2;
-          n += 128;
-          _G.stackPushes += 128;
-          updateCFA ();
-        }
-      else
-        {
-          if (n == -1)
-            {
-              emitcode ("pha", "");      /* 1 byte,  2 cycles */
-              regalloc_dry_run_cost++;
-            }
-          else if (n == 1 && optimize.codeSize && m6502_reg_a->isFree)
-            {
-              emitcode ("pla", "");      /* 1 byte,  3 cycles */
-              regalloc_dry_run_cost++;
-            }
-          else
-            {
-        // TODO
-              emitcode ("ais", "#%d", n); /* 2 bytes, 2 cycles */
-              regalloc_dry_run_cost += 2;
-            }
-          _G.stackPushes -= n;
-          n = 0;
-          updateCFA ();
-        }
-    }
+  _G.stackPushes -= n;
+  if (n <= -14 || n >= 14) {
+    // TODO: too big, consider subroutine
+    storeRegTemp(m6502_reg_xa, false);
+    emitcode ("tsx", "");
+    emitcode ("txa", "");
+    emitcode ("clc", "");
+    emitcode ("adc", "#%d", n);
+    emitcode ("tax", "");
+    emitcode ("txs", "");
+    n = 0;
+    regalloc_dry_run_cost += 8;
+    loadRegTemp(m6502_reg_xa, false);
+  }
+  while (n < 0) {
+    emitcode ("pha", "");      /* 1 byte,  2 cycles */
+    regalloc_dry_run_cost++;
+    n++;
+  }
+  while (n > 0) {
+    emitcode ("pla", "");      /* 1 byte,  2 cycles */
+    regalloc_dry_run_cost++;
+    n--;
+  }
+  updateCFA ();
+}
+
+/*--------------------------------------------------------------------------*/
+/* adjustX - Adjust the stack pointer by n bytes.                       */
+/*--------------------------------------------------------------------------*/
+static void
+adjustX (int n)
+{
+  if (n <= -14 || n >= 14) {
+    // TODO: too big, consider subroutine
+    storeRegTemp(m6502_reg_xa, false);
+    emitcode ("txa", "");
+    emitcode ("clc", "");
+    emitcode ("adc", "#%d", n);
+    emitcode ("tax", "");
+    n = 0;
+    regalloc_dry_run_cost += 6;
+    loadRegTemp(m6502_reg_xa, false);
+  }
+  while (n < 0) {
+    emitcode ("dex", "");      /* 1 byte,  2 cycles */
+    regalloc_dry_run_cost++;
+    n++;
+  }
+  while (n > 0) {
+    emitcode ("inx", "");      /* 1 byte,  2 cycles */
+    regalloc_dry_run_cost++;
+    n--;
+  }
 }
 
 #if DD(1) -1 == 0
@@ -703,11 +754,10 @@ forceload:
          }
       if (aop->type == AOP_SOF)
         {
-          int offset = (_G.stackOfs + _G.stackPushes + aop->aopu.aop_stk + aop->size - loffset - 1);
-          // TODO: old IS_M65C02 refs need removing
-          if (IS_M65C02 && offset >= 0 && offset <= 0xff)
+          int offset = (_G.stackOfs + _G.stackPushes + aop->aopu.aop_stk + loffset);
+          if (offset >= 0 && offset <= 0xff)
             {
-              emitcode ("ldhx", "%s", aopAdrStr (aop, loffset, TRUE));
+              emitcode ("ldx", "%s", aopAdrStr (aop, loffset, TRUE));
               regalloc_dry_run_cost += 2;
               m6502_dirtyReg (reg, FALSE);
               break;
@@ -1615,7 +1665,7 @@ accopWithAop (char *accop, asmop *aop, int loffset)
   else if (aop->type == AOP_REG)
     {
       pushReg (aop->aopu.aop_reg[loffset], FALSE);
-      emitcode (accop, "1,s");
+      emitcode (accop, TEMP0);
       regalloc_dry_run_cost += 3;
       pullNull (1);
     }
@@ -1672,7 +1722,6 @@ rmwWithReg (char *rmwop, reg_info * reg)
         emitcode (rmwop, "a");
       }
       regalloc_dry_run_cost++;
-      m6502_dirtyReg (m6502_reg_a, FALSE);
     }
   else if (reg->rIdx == X_IDX)
     {
@@ -1685,21 +1734,33 @@ rmwWithReg (char *rmwop, reg_info * reg)
         emitcode ("txa", "");
         rmwWithReg (rmwop, m6502_reg_a);
         emitcode ("tax", "");
-        regalloc_dry_run_cost += 3;
+        regalloc_dry_run_cost += 1;
         pullReg (m6502_reg_a);
-        m6502_dirtyReg (m6502_reg_a, FALSE);
       }
       regalloc_dry_run_cost++;
     }
-    // TODO: Y
+  else if (reg->rIdx == Y_IDX)
+    {
+      if (!strcmp(rmwop, "inc"))
+        emitcode ("iny", "");
+      else if (!strcmp(rmwop, "dec"))
+        emitcode ("dey", "");
+      else {
+        pushReg (m6502_reg_a, FALSE);
+        emitcode ("tya", "");
+        rmwWithReg (rmwop, m6502_reg_a);
+        emitcode ("tay", "");
+        regalloc_dry_run_cost += 1;
+        pullReg (m6502_reg_a);
+      }
+      regalloc_dry_run_cost++;
+    }
   else
     {
-      pushReg (reg, FALSE);
-      emitcode (rmwop, "1,s");
-      regalloc_dry_run_cost += 3;
-      pullReg (reg);
-      m6502_dirtyReg (reg, FALSE);
+      wassertl(0, "rmwWithReg()");
     }
+  // always dirty dest. register
+  m6502_dirtyReg (reg, FALSE);
 }
 
 /*--------------------------------------------------------------------------*/
@@ -1806,10 +1867,7 @@ loadRegIndexed (reg_info * reg, int offset, char * rematOfs)
         }
       else if (offset >= 0 && offset <= 0xff)
         {
-          // TODO: use directly
-          emitcode("stx", TEMP0);
-          emitcode("sty", TEMP1);
-          regalloc_dry_run_cost += 4;
+          storeRegTemp (m6502_reg_hx, TRUE);
           loadRegFromConst(m6502_reg_h, offset);
           emitcode ("lda", "[%s],y", TEMP0);
           regalloc_dry_run_cost += 3;
@@ -1971,6 +2029,29 @@ operandConflictsWithHX (operand *op)
 }
 
 /*-----------------------------------------------------------------*/
+/* operandConflictsWithX - true if operand in x register */
+/*-----------------------------------------------------------------*/
+static bool
+operandConflictsWithX (operand *op)
+{
+  symbol *sym;
+  int i;
+
+  if (IS_ITEMP (op))
+    {
+      sym = OP_SYMBOL (op);
+      if (!sym->isspilt)
+        {
+          for(i = 0; i < sym->nRegs; i++)
+            if (sym->regs[i] == m6502_reg_x)
+              return TRUE;
+        }
+    }
+
+  return FALSE;
+}
+
+/*-----------------------------------------------------------------*/
 /* operandOnStack - returns True if operand is on the stack        */
 /*-----------------------------------------------------------------*/
 static bool
@@ -1993,8 +2074,8 @@ operandOnStack(operand *op)
 }
 
 /*-----------------------------------------------------------------*/
-/* tsxUseful - returns True if tsx could help at least two         */
-/*             anticipated stack references                        */
+/* tsxUseful - returns True if tsx could help at least one         */
+/*             anticipated stack reference                         */
 /*-----------------------------------------------------------------*/
 static bool
 tsxUseful(iCode *ic)
@@ -2010,7 +2091,7 @@ tsxUseful(iCode *ic)
         }
     }
 
-  while (ic && uses < 2)
+  while (ic && uses < 1)
     {
       if (ic->op == IFX)
         {
@@ -2048,9 +2129,27 @@ tsxUseful(iCode *ic)
       ic = ic->next;
     }
 
-  return uses>=2;
+  return uses >= 1;
 }
 
+static void doTSX(bool saveBasePtr) {
+  // TODO: avoid redundant tsx
+  emitcode ("tsx", "");
+  m6502_dirtyReg (m6502_reg_x, FALSE);
+  m6502_reg_x->aop = &tsxaop;
+  _G.tsxStackPushes = _G.stackPushes;
+  regalloc_dry_run_cost += 1;
+  if (saveBasePtr) {
+    emitcode ("stx", BASEPTR);
+    regalloc_dry_run_cost += 2;
+  }
+}
+
+static void saveBasePtr() {
+  storeRegTemp (m6502_reg_x, FALSE);
+  doTSX(true);
+  loadRegTemp (m6502_reg_x, FALSE);
+}
 
 /*-----------------------------------------------------------------*/
 /* aopForSym - for a true symbol                                   */
@@ -2092,13 +2191,13 @@ aopForSym (iCode * ic, symbol * sym, bool result)
       aop->size = getSize (sym->type);
       aop->aopu.aop_stk = sym->stack;
 
-      if (!regalloc_dry_run && m6502_reg_hx->isFree && m6502_reg_hx->aop != &tsxaop)
+      if (!regalloc_dry_run && m6502_reg_x->isFree && m6502_reg_x->aop != &tsxaop)
         {
-          if (!m6502_reg_h->isDead || !m6502_reg_x->isDead)
+          if (!m6502_reg_x->isDead)
             return aop;
-          if (ic->op == IFX && operandConflictsWithHX (IC_COND (ic)))
+          if (ic->op == IFX && operandConflictsWithX (IC_COND (ic)))
             return aop;
-          else if (ic->op == JUMPTABLE && operandConflictsWithHX (IC_JTCOND (ic)))
+          else if (ic->op == JUMPTABLE && operandConflictsWithX (IC_JTCOND (ic)))
             return aop;
           else
             {
@@ -2107,21 +2206,16 @@ aopForSym (iCode * ic, symbol * sym, bool result)
                 return aop;
               if (ic->op == ADDRESS_OF)
                 return aop;
-              if (operandConflictsWithHX (IC_LEFT (ic)))
+              if (operandConflictsWithX (IC_LEFT (ic)))
                 return aop;
-              if (operandConflictsWithHX (IC_RIGHT (ic)))
+              if (operandConflictsWithX (IC_RIGHT (ic)))
                 return aop;
             }
-          /* It's safe to use tsx here. tsx costs 1 byte and 2 cycles but */
-          /* can save us 1 byte and 1 cycle for each time we can use x    */
-          /* instead of sp. For a single use, we break even on bytes, but */
-          /* lose a cycle. Make sure there are at least two uses.         */
+          /* It's safe to use tsx here. */
           if (!tsxUseful (ic))
             return aop;
-          emitcode ("tsx", "");
-          m6502_dirtyReg (m6502_reg_hx, FALSE);
-          m6502_reg_hx->aop = &tsxaop;
-          _G.tsxStackPushes = _G.stackPushes;
+          // transfer S to X
+          doTSX(false);
         }
       return aop;
     }
@@ -2796,20 +2890,24 @@ aopAdrStr (asmop * aop, int loffset, bool bit16)
       else
         return aopLiteral (aop->aopu.aop_lit, loffset);
 
-    case AOP_SOF:
-      if (!regalloc_dry_run && m6502_reg_hx->aop == &tsxaop)
-        {
-          xofs = _G.stackOfs + _G.tsxStackPushes + aop->aopu.aop_stk + offset;
-          if (xofs)
-            sprintf (s, "%d,x", xofs);
-          else
-            sprintf (s, ",x");
+    case AOP_SOF: // TODO?
+      if (regalloc_dry_run) {
+        return "1,x"; // fake result, not needed
+      } else {
+        bool needpullx = FALSE;
+        if (m6502_reg_x->aop == &tsxaop) {
+          xofs = STACK_TOP + _G.stackOfs + _G.tsxStackPushes + aop->aopu.aop_stk + offset;
+          sprintf (s, "%d,x", xofs);
+          rs = Safe_calloc (1, strlen (s) + 1);
+          strcpy (rs, s);
+          return rs;
+        } else if (m6502_reg_y->isFree) {
+          loadRegFromConst(m6502_reg_y, offset);
+          return "[__BASEPTR],y"; // TODO
+        } else {
+          return "xxx,s"; // TODO
         }
-      else
-        sprintf (s, "%d,s", _G.stackOfs + _G.stackPushes + aop->aopu.aop_stk + offset + 1);
-      rs = Safe_calloc (1, strlen (s) + 1);
-      strcpy (rs, s);
-      return rs;
+      }
     case AOP_IDX:
       xofs = offset; /* For now, assume hx points to the base address of operand */
       if (xofs)
@@ -3784,9 +3882,7 @@ genCall (iCode * ic)
       m6502_useReg (m6502_reg_a);
       if (operandSize (IC_RESULT (ic)) > 1)
         m6502_useReg (m6502_reg_x);
-      _G.accInUse++;
       aopOp (IC_RESULT (ic), ic, FALSE);
-      _G.accInUse--;
 
       assignResultValue (IC_RESULT (ic));
 
@@ -3879,9 +3975,7 @@ genPcall (iCode * ic)
       m6502_useReg (m6502_reg_a);
       if (operandSize (IC_RESULT (ic)) > 1)
         m6502_useReg (m6502_reg_x);
-      _G.accInUse++;
       aopOp (IC_RESULT (ic), ic, FALSE);
-      _G.accInUse--;
 
       assignResultValue (IC_RESULT (ic));
 
@@ -3951,7 +4045,6 @@ genFunction (iCode * ic)
   int stackAdjust = sym->stack;
   int accIsFree = sym->recvSize == 0;
 
-  _G.nRegsSaved = 0;
   _G.stackPushes = 0;
   /* create the function header */
   emitcode (";", "-----------------------------------------");
@@ -4029,6 +4122,7 @@ genFunction (iCode * ic)
   if (stackAdjust)
     {
       adjustStack (-stackAdjust);
+      saveBasePtr();
     }
   _G.stackOfs = sym->stack;
   _G.stackPushes = 0;
@@ -6719,14 +6813,13 @@ XAccLsh (int shCount)
       return;
     }
     
-  emitcode("stx", TEMP1);
-  regalloc_dry_run_cost += 2;
+  storeRegTemp(m6502_reg_x, TRUE);
 
   /* if we can beat 2n cycles or bytes for some special case, do it here */
   if (0) switch (shCount)
     {
     case 7:
-      emitcode("lsr", TEMP1);
+      emitcode("lsr", TEMP0);
       regalloc_dry_run_cost += 1;
       rmwWithReg ("ror", m6502_reg_a);
       transferRegReg (m6502_reg_a, m6502_reg_x, FALSE);
@@ -6743,12 +6836,11 @@ XAccLsh (int shCount)
   for (i = 0; i < shCount; i++)
     {
       rmwWithReg ("asl", m6502_reg_a);
-      emitcode("rol", TEMP1);
+      emitcode("rol", TEMP0);
       regalloc_dry_run_cost += 1;
     }
 
-  emitcode("ldx", TEMP1);
-  regalloc_dry_run_cost += 2;
+  loadRegTemp(m6502_reg_x, TRUE);
 }
 
 /*-----------------------------------------------------------------*/
@@ -6761,8 +6853,7 @@ XAccSRsh (int shCount)
 
   shCount &= 0x000f;            // shCount : 0..7
 
-  emitcode("stx", TEMP1);
-  regalloc_dry_run_cost += 2;
+  storeRegTemp(m6502_reg_x, TRUE);
 
   /* if we can beat 2n cycles or bytes for some special case, do it here */
   if (0) switch (shCount) // TODO
@@ -6819,13 +6910,12 @@ XAccSRsh (int shCount)
   /* the fastest and shortest.                                           */
   for (i = 0; i < shCount; i++)
     {
-      emitcode("lsr", TEMP1);
+      emitcode("lsr", TEMP0);
       regalloc_dry_run_cost += 1;
       rmwWithReg ("ror", m6502_reg_a);
     }
 
-  emitcode("ldx", TEMP1);
-  regalloc_dry_run_cost += 2;
+  loadRegTemp(m6502_reg_x, TRUE);
 }
 
 /*-----------------------------------------------------------------*/
@@ -6844,8 +6934,7 @@ XAccRsh (int shCount, bool sign)
 
   shCount &= 0x000f;            // shCount : 0..f
 
-  emitcode("stx", TEMP1);
-  regalloc_dry_run_cost += 2;
+  storeRegTemp(m6502_reg_x, TRUE);
 
   /* if we can beat 2n cycles or bytes for some special case, do it here */
   if (0) switch (shCount) // TODO
@@ -6933,12 +7022,12 @@ XAccRsh (int shCount, bool sign)
   /* the fastest and shortest.                                           */
   for (i = 0; i < shCount; i++)
     {
-      emitcode("lsr", TEMP1);
+      emitcode("lsr", TEMP0);
       regalloc_dry_run_cost += 2;
       rmwWithReg ("ror", m6502_reg_a);
     }
-  emitcode("ldx", TEMP1);
-  regalloc_dry_run_cost += 2;
+    
+  loadRegTemp(m6502_reg_x, TRUE);
 
 }
 
@@ -9158,28 +9247,13 @@ genAddrOf (iCode * ic)
       needpullx = pushRegIfSurv (m6502_reg_x);
       needpullh = pushRegIfSurv (m6502_reg_h);
       /* if it has an offset then we need to compute it */
-      offset = _G.stackOfs + _G.stackPushes + sym->stack;
+      offset = _G.stackOfs + _G.stackPushes + sym->stack; // TODO?
       m6502_useReg (m6502_reg_hx);
       emitcode ("tsx", "");
-      m6502_dirtyReg (m6502_reg_hx, FALSE);
+      m6502_dirtyReg (m6502_reg_x, FALSE);
+      loadRegFromConst(m6502_reg_h, 1); // stack top = 0x100
       regalloc_dry_run_cost++;
-      while (offset > 127)
-        {
-          emitcode ("aix", "#127");
-          regalloc_dry_run_cost += 2;
-          offset -= 127;
-        }
-      while (offset < -128)
-        {
-          emitcode ("aix", "#-128");
-          regalloc_dry_run_cost += 2;
-          offset += 128;
-        }
-      if (offset)
-        {
-          emitcode ("aix", "#%d", offset);
-          regalloc_dry_run_cost += 2;
-        }
+      adjustX(offset);
       storeRegToFullAop (m6502_reg_hx, AOP (IC_RESULT (ic)), FALSE);
       pullOrFreeReg (m6502_reg_h, needpullh);
       pullOrFreeReg (m6502_reg_x, needpullx);

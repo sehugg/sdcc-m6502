@@ -24,6 +24,24 @@ replace {
 }
 
 replace {
+	txs
+	tsx
+} by {
+	txs
+	; Peephole - removed redundant tsx
+}
+
+replace {
+	tax
+	txs
+	txa
+} by {
+	tax
+	txs
+	; Peephole - removed redundant txa
+}
+
+replace {
 	bcs	%1
 	jmp	%5
 %1:
@@ -168,7 +186,7 @@ replace restart {
 } by {
 	; Peephole 3	- shortened jmp to bra
 	bra	%5
-} if labelInRange(%5)
+} if labelInRange(%5) && IS_M65C02
 
 replace {
 	lda	%1

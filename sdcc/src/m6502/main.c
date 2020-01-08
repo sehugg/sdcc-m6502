@@ -378,7 +378,7 @@ oclsExpense (struct memmap *oclass)
   if (IN_FARSPACE (oclass))     /* extended addressing mode is almost at fast */
     return -1;
   if (oclass == istack)         /* stack is the slowest */
-    return 1;
+    return 2;
 
   return 0; /* anything we missed */
 }
