@@ -215,14 +215,17 @@ _m6502_genAssemblerPreamble (FILE * of)
   fprintf (of, "\t.area %s\n",port->mem.const_name);
   fprintf (of, "\t.area %s\n",port->mem.data_name);
   fprintf (of, "\t.globl __TEMP\n");
-  fprintf (of, "__TEMP:\t.ds 4\n");
   fprintf (of, "\t.area %s\n",port->mem.overlay_name);
   fprintf (of, "\t.area %s\n",port->mem.xdata_name);
   fprintf (of, "\t.area %s\n",port->mem.xidata_name);
 
+
   if ((mainExists=findSymWithLevel(SymbolTab, mainExists)))
     {
-      // generate interrupt vector table
+      // global variables in zero page
+      fprintf (of, "\t.area %s\n",port->mem.data_name);
+      fprintf (of, "__TEMP:\t.ds 8\n");
+      // generate interrupt vector table (TODO)
       fprintf (of, "\t.area\tCODEIVT (ABS)\n");
 
       for (i=maxInterrupts;i>0;i--)
