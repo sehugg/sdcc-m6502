@@ -1794,29 +1794,16 @@ rmwWithAop (char *rmwop, asmop * aop, int loffset)
       return;
     }
 
-  /* If we need a register: */
-  /*   use A if it's free,  */
-  /*   otherwise use X if it's free */
-  /*   otherwise use A (and preserve original value via the stack) */
-  if (!m6502_reg_a->isFree && m6502_reg_x->isFree)
-    reg = m6502_reg_x;
-  else
-    reg = m6502_reg_a;
+  reg = getFreeByteReg();
 
   switch (aop->type)
     {
     case AOP_REG:
       rmwWithReg (rmwop, aop->aopu.aop_reg[loffset]);
       break;
-    // TODO
     case AOP_DIR:
     case AOP_EXT:
-      needpull = pushRegIfUsed (reg);
-      loadRegFromAop (reg, aop, loffset);
-      rmwWithReg (rmwop, reg);
-      if (strcmp ("tst", rmwop))
-        storeRegToAop (reg, aop, loffset);
-      pullOrFreeReg (reg, needpull);
+      emitcode (rmwop, aopAdrStr(aop, loffset, FALSE));
       break;
     case AOP_DUMMY:
       break;
@@ -2398,8 +2385,8 @@ sameRegs (asmop * aop1, asmop * aop2)
         case AOP_SOF:
           return (aop1->aopu.aop_stk == aop2->aopu.aop_stk);
         case AOP_DIR:
-          if (regalloc_dry_run)
-            return FALSE; // TODO: why?
+//          if (regalloc_dry_run)
+//            return FALSE; // TODO: why?
         case AOP_EXT:
           return (!strcmp (aop1->aopu.aop_dir, aop2->aopu.aop_dir));
         }
@@ -2550,7 +2537,10 @@ aopOp (operand *op, iCode * ic, bool result)
               aop->aopu.aop_stk = 8; /* bogus stack offset, high enough to prevent optimization */
             }
           else
-            sym->aop = op->aop = aop = newAsmop (AOP_DIR);
+            {
+              sym->aop = op->aop = aop = newAsmop (AOP_DIR);
+              aop->aopu.aop_dir = sym->name; //TODO? avoids crashing in sameRegs()
+            }
           aop->size = getSize (sym->type);
           aop->op = op;
           return;
