@@ -207,8 +207,6 @@ transferRegReg (reg_info *sreg, reg_info *dreg, bool freesrc)
       return;
     }
 
-  DD (emitcode ("", "; transferRegReg(%s,%s)", sreg->name, dreg->name));
-
   srcidx = sreg->rIdx;
   dstidx = dreg->rIdx;
 
@@ -217,6 +215,8 @@ transferRegReg (reg_info *sreg, reg_info *dreg, bool freesrc)
       m6502_useReg (dreg);
       return;
     }
+
+  DD (emitcode ("", "; transferRegReg(%s,%s)", sreg->name, dreg->name));
 
 // TODO: make sure regs are killed if clobbered
   switch (dstidx)
@@ -338,7 +338,7 @@ updateCFA (void)
 static bool
 storeRegTemp (reg_info * reg, bool always) {
 
-  if (reg->isFree && !always)
+  if (reg->isDead && !always)
     return false;
     
   int regidx = reg->rIdx;
@@ -375,7 +375,7 @@ storeRegTemp (reg_info * reg, bool always) {
 static void
 loadRegTemp (reg_info * reg, bool always) {
 
-  if (reg->isFree && !always) {
+  if (reg->isDead && !always) {
     // assume we clobbered it
     if (!always)
       m6502_dirtyReg (reg, FALSE);
@@ -1894,8 +1894,8 @@ loadRegIndexed (reg_info * reg, int offset, char * rematOfs)
   switch (reg->rIdx)
     {
     case A_IDX:
-      // TODO? what if rematOfs > 255?
-      if (rematOfs)
+      // TODO: have to remove dead Y loads
+      if (rematOfs && m6502_reg_y->isLitConst && m6502_reg_y->litConst == 0)
         {
           if (!offset)
             emitcode ("lda", "(%s),x", rematOfs);
@@ -1908,18 +1908,19 @@ loadRegIndexed (reg_info * reg, int offset, char * rematOfs)
           storeRegTemp (m6502_reg_hx, TRUE);
           loadRegFromConst(m6502_reg_h, offset);
           emitcode ("lda", "[%s],y", TEMP0);
-          loadRegTemp (m6502_reg_hx, TRUE); // TODO?
+          loadRegTemp (m6502_reg_hx, FALSE); // TODO: only load if needed?
           regalloc_dry_run_cost += 3;
         }
       else
         {
-          emitcode ("lda", ",x"); // TODO
+          emitcode ("ldaxxx", ",x"); // TODO
           regalloc_dry_run_cost++;
         }
       m6502_dirtyReg (reg, FALSE);
       break;
     case X_IDX:
-    case H_IDX:
+    case H_IDX:	
+      // TODO
       needpula = pushRegIfUsed (m6502_reg_a);
       loadRegIndexed (m6502_reg_a, offset, rematOfs);
       transferRegReg (reg, m6502_reg_a, TRUE);
@@ -9089,7 +9090,7 @@ genJumpTab (iCode * ic)
         }
       regalloc_dry_run_cost += 6;
       transferRegReg (m6502_reg_a, m6502_reg_h, TRUE);
-      emitcode ("jmp", ",x");
+      emitcode ("jmp", ",x"); // TODO
       regalloc_dry_run_cost++;
 
       m6502_dirtyReg (m6502_reg_a, TRUE);
