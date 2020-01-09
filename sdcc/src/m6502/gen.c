@@ -6225,203 +6225,6 @@ genRLC (iCode * ic)
 }
 
 /*-----------------------------------------------------------------*/
-/* genGetAbit - generates code get a single bit                    */
-/*-----------------------------------------------------------------*/
-static void
-genGetAbit (iCode * ic)
-{
-  operand *left, *right, *result;
-  int shCount;
-  bool needpulla;
-
-  D (emitcode (";     genGetAbit", ""));
-
-  left = IC_LEFT (ic);
-  right = IC_RIGHT (ic);
-  result = IC_RESULT (ic);
-  aopOp (left, ic, FALSE);
-  aopOp (right, ic, FALSE);
-  aopOp (result, ic, FALSE);
-
-  shCount = (int) ulFromVal (AOP (IC_RIGHT (ic))->aopu.aop_lit);
-
-  needpulla = pushRegIfSurv (m6502_reg_a);
-
-  /* get the needed byte into a */
-  loadRegFromAop (m6502_reg_a, AOP (left), shCount / 8);
-  shCount %= 8;
-  if (AOP_TYPE (result) == AOP_CRY)
-    {
-      // TODO: not really carry bit?
-      emitcode ("and", "#0x%02x", 1 << shCount);
-      regalloc_dry_run_cost += 2;
-      m6502_dirtyReg (m6502_reg_a, FALSE);
-    }
-  else
-    {
-      switch (shCount)
-        {
-        case 4:
-          emitcode ("lsr", "a");
-          regalloc_dry_run_cost++;
-          //fallthrough
-        case 3:
-          emitcode ("lsr", "a");
-          regalloc_dry_run_cost++;
-          //fallthrough
-        case 2:
-          emitcode ("lsr", "a");
-          regalloc_dry_run_cost++;
-          //fallthrough
-        case 1:
-          emitcode ("lsr", "a");
-          regalloc_dry_run_cost++;
-          //fallthrough
-        case 0:
-          emitcode ("and", one);
-          regalloc_dry_run_cost += 2;
-          break;
-        case 5:
-          emitcode ("rol", "a");
-          regalloc_dry_run_cost++;
-          //fallthrough
-        case 6:
-          emitcode ("rol", "a");
-          regalloc_dry_run_cost++;
-          //fallthrough
-        case 7:
-          emitcode ("rol", "a");
-          emitcode ("lda", zero);
-          emitcode ("rol", "a");
-          regalloc_dry_run_cost += 4;
-          break;
-        }
-      m6502_dirtyReg (m6502_reg_a, FALSE);
-      storeRegToFullAop (m6502_reg_a, AOP (result), FALSE);
-    }
-  pullOrFreeReg (m6502_reg_a, needpulla);
-
-  freeAsmop (result, NULL, ic, TRUE);
-  freeAsmop (right, NULL, ic, TRUE);
-  freeAsmop (left, NULL, ic, TRUE);
-}
-
-/*-----------------------------------------------------------------*/
-/* genGetByte - generates code get a single byte                   */
-/*-----------------------------------------------------------------*/
-static void
-genGetByte (iCode * ic)
-{
-  operand *left, *right, *result;
-  int offset;
-
-  D (emitcode (";", "genGetByte"));
-
-  left = IC_LEFT (ic);
-  right = IC_RIGHT (ic);
-  result = IC_RESULT (ic);
-  aopOp (left, ic, FALSE);
-  aopOp (right, ic, FALSE);
-  aopOp (result, ic, FALSE);
-
-  offset = (int) ulFromVal (AOP (right)->aopu.aop_lit) / 8;
-  transferAopAop (AOP (left), offset, AOP (result), 0);
-
-  freeAsmop (result, NULL, ic, TRUE);
-  freeAsmop (right, NULL, ic, TRUE);
-  freeAsmop (left, NULL, ic, TRUE);
-}
-
-/*-----------------------------------------------------------------*/
-/* genGetWord - generates code get two bytes                       */
-/*-----------------------------------------------------------------*/
-static void
-genGetWord (iCode * ic)
-{
-  operand *left, *right, *result;
-  int offset;
-
-  D (emitcode (";", "genGetWord"));
-
-  left = IC_LEFT (ic);
-  right = IC_RIGHT (ic);
-  result = IC_RESULT (ic);
-  aopOp (left, ic, FALSE);
-  aopOp (right, ic, FALSE);
-  aopOp (result, ic, FALSE);
-
-  offset = (int) ulFromVal (AOP (right)->aopu.aop_lit) / 8;
-  transferAopAop (AOP (left), offset + 1, AOP (result), 1);
-  transferAopAop (AOP (left), offset, AOP (result), 0);
-
-  freeAsmop (result, NULL, ic, TRUE);
-  freeAsmop (right, NULL, ic, TRUE);
-  freeAsmop (left, NULL, ic, TRUE);
-}
-
-/*-----------------------------------------------------------------*/
-/* genSwap - generates code to swap nibbles or bytes               */
-/*-----------------------------------------------------------------*/
-static void
-genSwap (iCode * ic)
-{
-  operand *left, *result;
-  bool needpulla;
-
-  D (emitcode (";     genSwap", ""));
-
-  left = IC_LEFT (ic);
-  result = IC_RESULT (ic);
-  aopOp (left, ic, FALSE);
-  aopOp (result, ic, FALSE);
-
-  switch (AOP_SIZE (left))
-    {
-    case 1:                    /* swap nibbles in byte */
-      needpulla = pushRegIfSurv (m6502_reg_a);
-      loadRegFromAop (m6502_reg_a, AOP (left), 0);
-      emitcode ("nsa", "");
-      regalloc_dry_run_cost++;
-      m6502_dirtyReg (m6502_reg_a, FALSE);
-      storeRegToAop (m6502_reg_a, AOP (result), 0);
-      pullOrFreeReg (m6502_reg_a, needpulla);
-      break;
-    case 2:                    /* swap bytes in a word */
-      if (IS_AOP_XA (AOP (left)) && IS_AOP_AX (AOP (result)) ||
-        IS_AOP_AX (AOP (left)) && IS_AOP_XA (AOP (result)))
-        break;
-      if (AOP_TYPE (result) == AOP_REG && AOP_TYPE (left) == AOP_REG)
-        {
-          if (AOP (result)->aopu.aop_reg[1] != AOP (left)->aopu.aop_reg[0])
-            pushReg (AOP (left)->aopu.aop_reg[0], TRUE);
-          storeRegToAop (AOP (left)->aopu.aop_reg[1], AOP (result), 0);
-          if (AOP (result)->aopu.aop_reg[1] != AOP (left)->aopu.aop_reg[0])
-            pullReg (AOP (result)->aopu.aop_reg[1]);
-        }
-      else if (operandsEqu (left, result) || sameRegs (AOP (left), AOP (result)))
-        {
-          needpulla = pushRegIfSurv (m6502_reg_a);
-          loadRegFromAop (m6502_reg_a, AOP (left), 0);
-          m6502_useReg (m6502_reg_a);
-          transferAopAop (AOP (left), 1, AOP (result), 0);
-          storeRegToAop (m6502_reg_a, AOP (result), 1);
-          pullOrFreeReg (m6502_reg_a, needpulla);
-        }
-      else
-        {
-          transferAopAop (AOP (left), 0, AOP (result), 1);
-          transferAopAop (AOP (left), 1, AOP (result), 0);
-        }
-      break;
-    default:
-      wassertl (FALSE, "unsupported SWAP operand size");
-    }
-
-  freeAsmop (left, NULL, ic, TRUE);
-  freeAsmop (result, NULL, ic, TRUE);
-}
-
-/*-----------------------------------------------------------------*/
 /* AccLsh - left shift accumulator by known count                  */
 /*-----------------------------------------------------------------*/
 static void
@@ -9445,40 +9248,6 @@ release:
 }
 
 /*-----------------------------------------------------------------*/
-/* genDjnz - generate decrement & jump if not zero instrucion      */
-/*-----------------------------------------------------------------*/
-static int
-genDjnz (iCode * ic, iCode * ifx)
-{
-  if (!ifx)
-    return 0;
-
-  D (emitcode (";     genDjnz", ""));
-
-  /* if the minus is not of the form
-     a = a - 1 */
-  if (!isOperandEqual (IC_RESULT (ic), IC_LEFT (ic)) || !IS_OP_LITERAL (IC_RIGHT (ic)))
-    return 0;
-
-  if (operandLitValue (IC_RIGHT (ic)) != 1)
-    return 0;
-
-  /* if the size of this greater than one then no
-     saving, unless it's already in HX  */
-  aopOp (IC_RESULT (ic), ic, FALSE);
-  if (AOP_SIZE (IC_RESULT (ic)) > 1 && !IS_AOP_HX (AOP (IC_RESULT (ic))))
-    {
-      freeAsmop (IC_RESULT (ic), NULL, ic, TRUE);
-      return 0;
-    }
-
-  rmwWithAop ("dec", AOP (IC_RESULT (ic)), 0);
-  genIfxJump (ifx, "a");
-  freeAsmop (IC_RESULT (ic), NULL, ic, TRUE);
-  return 1;
-}
-
-/*-----------------------------------------------------------------*/
 /* genReceive - generate code for a receive iCode                  */
 /*-----------------------------------------------------------------*/
 static void
@@ -9524,57 +9293,40 @@ genReceive (iCode * ic)
   freeAsmop (IC_RESULT (ic), NULL, ic, TRUE);
 }
 
+// support routine for genDummyRead
+static void dummyRead(iCode* ic, operand* op, reg_info* reg) {
+  if (op && IS_SYMOP (op))
+    {
+      aopOp (op, ic, FALSE);
+      int size = AOP_SIZE (op);
+      for (int offset=0; offset<size; offset++) {
+        loadRegFromAop (reg, AOP (op), offset);
+      }
+      freeAsmop (op, NULL, ic, TRUE);
+    }
+}
+
 /*-----------------------------------------------------------------*/
 /* genDummyRead - generate code for dummy read of volatiles        */
 /*-----------------------------------------------------------------*/
 static void
 genDummyRead (iCode * ic)
 {
-  operand *op;
-  int size, offset;
-  bool needpulla;
+  bool needpulla = FALSE;
 
   D (emitcode (";     genDummyRead", ""));
 
-  op = IC_RIGHT (ic);
+  reg_info* reg = getFreeByteReg();
+  if (!reg) {
+    needpulla = pushRegIfSurv (m6502_reg_a);
+    reg = m6502_reg_a;
+  }
+  
+  // TODO: use BIT? STA?
+  dummyRead(ic, IC_RIGHT(ic), reg);
+  dummyRead(ic, IC_LEFT(ic), reg);
 
-  needpulla = pushRegIfSurv (m6502_reg_a);
-  if (op && IS_SYMOP (op))
-    {
-
-      aopOp (op, ic, FALSE);
-
-      size = AOP_SIZE (op);
-      offset = size - 1;
-
-      while (size--)
-        {
-          loadRegFromAop (m6502_reg_a, AOP (op), offset);
-          m6502_freeReg (m6502_reg_a);
-          offset--;
-        }
-
-      freeAsmop (op, NULL, ic, TRUE);
-    }
-  op = IC_LEFT (ic);
-  if (op && IS_SYMOP (op))
-    {
-
-      aopOp (op, ic, FALSE);
-
-      size = AOP_SIZE (op);
-      offset = size - 1;
-
-      while (size--)
-        {
-          loadRegFromAop (m6502_reg_a, AOP (op), offset);
-          m6502_freeReg (m6502_reg_a);
-          offset--;
-        }
-
-      freeAsmop (op, NULL, ic, TRUE);
-    }
-  pullOrFreeReg (m6502_reg_a, needpulla);
+  pullOrFreeReg (reg, needpulla);
 }
 
 /*-----------------------------------------------------------------*/
@@ -9588,16 +9340,16 @@ genCritical (iCode * ic)
   if (IC_RESULT (ic))
     aopOp (IC_RESULT (ic), ic, TRUE);
 
-  emitcode ("tpa", "");
+  emitcode ("php", "");
   regalloc_dry_run_cost++;
-  m6502_dirtyReg (m6502_reg_a, FALSE);
   emitcode ("sei", "");
   regalloc_dry_run_cost++;
 
-  if (IC_RESULT (ic))
+  if (IC_RESULT (ic)) {
+    emitcode ("plp", "");
+    m6502_dirtyReg (m6502_reg_a, FALSE);
     storeRegToAop (m6502_reg_a, AOP (IC_RESULT (ic)), 0);
-  else
-    pushReg (m6502_reg_a, FALSE);
+  }
 
   m6502_freeReg (m6502_reg_a);
   if (IC_RESULT (ic))
@@ -9616,15 +9368,15 @@ genEndCritical (iCode * ic)
     {
       aopOp (IC_RIGHT (ic), ic, FALSE);
       loadRegFromAop (m6502_reg_a, AOP (IC_RIGHT (ic)), 0);
-      emitcode ("tap", "");
-      regalloc_dry_run_cost++;
+      emitcode ("pha", "");
+      emitcode ("plp", "");
+      regalloc_dry_run_cost += 2;
       m6502_freeReg (m6502_reg_a);
       freeAsmop (IC_RIGHT (ic), NULL, ic, TRUE);
     }
   else
     {
-      pullReg (m6502_reg_a);
-      emitcode ("tap", "");
+      emitcode ("plp", "");
       regalloc_dry_run_cost++;
     }
 }
@@ -9772,8 +9524,7 @@ genm6502iCode (iCode *ic)
       break;
 
     case '-':
-      if (!genDjnz (ic, ifxForOp (IC_RESULT (ic), ic)))
-        genMinus (ic);
+      genMinus (ic);
       break;
 
     case '*':
@@ -9832,20 +9583,12 @@ genm6502iCode (iCode *ic)
       genRLC (ic);
       break;
 
+    case SWAP:
     case GETHBIT:
-      wassertl (0, "Unimplemented iCode");
-      break;
-
     case GETABIT:
-      genGetAbit (ic);
-      break;
-
     case GETBYTE:
-      genGetByte (ic);
-      break;
-
     case GETWORD:
-      genGetWord (ic);
+      wassertl (0, "Unimplemented iCode");
       break;
 
     case LEFT_OP:
@@ -9909,10 +9652,6 @@ genm6502iCode (iCode *ic)
 
     case ENDCRITICAL:
       genEndCritical (ic);
-      break;
-
-    case SWAP:
-      genSwap (ic);
       break;
 
     default:

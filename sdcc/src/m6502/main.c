@@ -183,7 +183,7 @@ _m6502_setDefaultOptions (void)
   options.code_loc = 0x8000;
   options.data_loc = 0x80;
   options.xdata_loc = 0;        /* 0 means immediately following data */
-  options.stack_loc = 0xff;
+  options.stack_loc = 0x1ff;
   options.out_fmt = 's';        /* use motorola S19 output */
 
   options.omitFramePtr = 1;     /* no frame pointer (we use SP */
@@ -215,7 +215,7 @@ _m6502_genAssemblerPreamble (FILE * of)
   fprintf (of, "\t.area %s\n",port->mem.const_name);
   fprintf (of, "\t.area %s\n",port->mem.data_name);
   fprintf (of, "\t.globl __TEMP\n");
-  fprintf (of, "\t.ds 4\n");
+  fprintf (of, "__TEMP:\t.ds 4\n");
   fprintf (of, "\t.area %s\n",port->mem.overlay_name);
   fprintf (of, "\t.area %s\n",port->mem.xdata_name);
   fprintf (of, "\t.area %s\n",port->mem.xidata_name);
@@ -247,7 +247,7 @@ _m6502_genAssemblerPreamble (FILE * of)
       fprintf (of, "__sdcc_gs_init_startup:\n");
       if (options.stack_loc)
         {
-          fprintf (of, "\tldx\t#0x%02x\n", options.stack_loc);
+          fprintf (of, "\tldx\t#0x%02x\n", options.stack_loc & 0xff);
           fprintf (of, "\ttxs\n");
         }
       else
