@@ -1,25 +1,15 @@
 # Regression test specification for the m6502 target running with uCsim
 
-# simulation timeout in seconds
-SIM_TIMEOUT = 40
+# simulation timeout in cycles
+SIM_CYCLES = 100000000
+SIM_TIMEOUT = 30
 
-# path to uCsim
+# path to sim65
+EMU = $(WINE) sim65 -c -v -x $(SIM_CYCLES)
 ifdef SDCC_BIN_PATH
-  UCHC08C = $(SDCC_BIN_PATH)/shc08$(EXEEXT)
-
-  AS_HC08C = $(SDCC_BIN_PATH)/sdas6500$(EXEEXT)
+  AS = $(SDCC_BIN_PATH)/sdas6500$(EXEEXT)
 else
-  ifdef UCSIM_DIR
-    UCHC08A = $(UCSIM_DIR)/hc08.src/shc08$(EXEEXT)
-  else
-    UCHC08A = $(top_builddir)/sim/ucsim/hc08.src/shc08$(EXEEXT)
-    UCHC08B = $(top_builddir)/bin/shc08$(EXEEXT)
-  endif
-
-  EMU = $(WINE) $(shell if [ -f $(UCHC08A) ]; then echo $(UCHC08A); else echo $(UCHC08B); fi)
-
   AS = $(WINE) $(top_builddir)/bin/sdas6500$(EXEEXT)
-
 ifndef CROSSCOMPILING
   SDCCFLAGS += --nostdinc -I$(top_srcdir)
   LINKFLAGS += --nostdlib -L$(top_builddir)/device/lib/build/m6502
@@ -30,7 +20,7 @@ ifdef CROSSCOMPILING
   SDCCFLAGS += -I$(top_srcdir)
 endif
 
-SDCCFLAGS += -mm6502 --less-pedantic --out-fmt-ihx
+SDCCFLAGS += -mm6502 --less-pedantic --out-fmt-ihx --code-loc 0x200
 LINKFLAGS += m6502.lib
 
 OBJEXT = .rel
@@ -65,7 +55,10 @@ $(PORT_CASES_DIR)/fwk.lib: $(srcdir)/fwk/lib/fwk.lib
 # run simulator with SIM_TIMEOUT seconds timeout
 %.out: %$(BINEXT) $(CASES_DIR)/timeout
 	mkdir -p $(dir $@)
-	-$(CASES_DIR)/timeout $(SIM_TIMEOUT) $(EMU) $< < $(PORTS_DIR)/$(PORT)/uCsim.cmd > $@ \
+	makebin -s 65536 $< $*.rom
+	printf 'sim65\2\0\0\0\2\0\2' > $*.bin
+	dd status=none if=$*.rom bs=512 count=126 skip=1 >> $*.bin
+	-$(CASES_DIR)/timeout $(SIM_TIMEOUT) $(EMU) $*.bin > $@ \
 	  || echo -e --- FAIL: \"timeout, simulation killed\" in $(<:$(BINEXT)=.c)"\n"--- Summary: 1/1/1: timeout >> $@
 	$(PYTHON) $(srcdir)/get_ticks.py < $@ >> $@
 	-grep -n FAIL $@ /dev/null || true

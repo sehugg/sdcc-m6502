@@ -460,13 +460,14 @@ pushReg (reg_info * reg, bool freereg)
       _G.stackPushes++;
       updateCFA ();
       break;
+    // little-endian order
     case HX_IDX:
-      pushReg(m6502_reg_x, freereg);
       pushReg(m6502_reg_h, freereg);
+      pushReg(m6502_reg_x, freereg);
       break;
     case XA_IDX:
-      pushReg(m6502_reg_a, freereg);
       pushReg(m6502_reg_x, freereg);
+      pushReg(m6502_reg_a, freereg);
       break;
     default:
       break; // TODO?
@@ -520,13 +521,14 @@ pullReg (reg_info * reg)
       _G.stackPushes--;
       updateCFA ();
       break;
+    // little-endian order
     case HX_IDX:
-      pullReg(m6502_reg_h);
       pullReg(m6502_reg_x);
+      pullReg(m6502_reg_h);
       break;
     case XA_IDX:
-      pullReg(m6502_reg_x);
       pullReg(m6502_reg_a);
+      pullReg(m6502_reg_x);
       break;
     default:
       break;
@@ -3575,7 +3577,7 @@ unsaveRegisters (iCode *ic)
 /* pushSide -                                                      */
 /*-----------------------------------------------------------------*/
 static void
-pushSide (operand *oper, int size, iCode *ic)
+pushSide (operand *oper, int size, iCode *ic, int delta)
 {
   int offset = 0;
   bool xIsFree = m6502_reg_x->isFree;
@@ -3586,17 +3588,17 @@ pushSide (operand *oper, int size, iCode *ic)
   if (AOP_TYPE (oper) == AOP_REG)
     {
       /* The operand is in registers; we can push them directly */
-      while (size--)
+      for (offset=size-1; offset>=0; offset--) 
         {
-          pushReg (AOP (oper)->aopu.aop_reg[offset++], TRUE);
+          pushReg (AOP (oper)->aopu.aop_reg[offset], TRUE);
         }
     }
   else if (m6502_reg_a->isFree)
     {
       /* A is free, so piecewise load operand into a and push A */
-      while (size--)
+      for (offset=size-1; offset>=0; offset--) 
         {
-          loadRegFromAop (m6502_reg_a, AOP (oper), offset++);
+          loadRegFromAop (m6502_reg_a, AOP (oper), offset);
           pushReg (m6502_reg_a, TRUE);
         }
     }
@@ -3606,9 +3608,9 @@ pushSide (operand *oper, int size, iCode *ic)
       /* into position on stack (using A), and restore original A */
       adjustStack (-size);
       pushReg (m6502_reg_a, TRUE);
-      while (size--)
+      for (offset=size-1; offset>=0; offset--) 
         {
-          loadRegFromAop (m6502_reg_a, AOP (oper), offset++);
+          loadRegFromAop (m6502_reg_a, AOP (oper), offset);
           emitcode ("sta2", "%d,s", 2+size);
           regalloc_dry_run_cost += 3;
         }
@@ -3669,9 +3671,9 @@ genIpush (iCode * ic)
       aopOp (IC_LEFT (ic), ic, FALSE);
       size = AOP_SIZE (IC_LEFT (ic));
       /* push it on the stack */
-      while (size--)
+      for (offset=size-1; offset>=0; offset--)
         {
-          loadRegFromAop (m6502_reg_a, AOP (IC_LEFT (ic)), offset++);
+          loadRegFromAop (m6502_reg_a, AOP (IC_LEFT (ic)), offset);
           pushReg (m6502_reg_a, TRUE);
         }
       return;
@@ -3702,15 +3704,15 @@ genIpush (iCode * ic)
 
   if (AOP_TYPE (IC_LEFT (ic)) == AOP_REG)
     {
-      while (size--)
-        pushReg (AOP (IC_LEFT (ic))->aopu.aop_reg[offset++], TRUE);
+      for (offset=size-1; offset>=0; offset--)
+        pushReg (AOP (IC_LEFT (ic))->aopu.aop_reg[offset], TRUE);
       goto release;
     }
 
-  while (size--)
+  for (offset=size-1; offset>=0; offset--)
     {
 //      printf("loading %d\n", offset);
-      loadRegFromAop (m6502_reg_a, AOP (IC_LEFT (ic)), offset++);
+      loadRegFromAop (m6502_reg_a, AOP (IC_LEFT (ic)), offset);
 //      printf("pushing \n");
       pushReg (m6502_reg_a, TRUE);
     }
@@ -3914,7 +3916,7 @@ genPcall (iCode * ic)
   iCode * sendic;
 
   D (emitcode (";", "genPcall"));
-
+  
   dtype = operandType (IC_LEFT (ic))->next;
   etype = getSpec (dtype);
   /* if caller saves & we have not saved then */
@@ -3938,8 +3940,10 @@ genPcall (iCode * ic)
       _G.stackPushes += 2;          /* account for the bsr return address now on stack */
       updateCFA ();
 
+  // TODO: use jmp(aa) or jmp(aaaa) 
+
       /* now push the function address */
-      pushSide (IC_LEFT (ic), FARPTRSIZE, ic);
+      pushSide (IC_LEFT (ic), FARPTRSIZE, ic, -1); // TODO: -1 delta isn't impl yet
     }
 
   /* if send set is not empty then assign */

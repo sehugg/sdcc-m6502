@@ -130,13 +130,6 @@ _m6502_regparm (sym_link * l, bool reentrant)
 static bool
 _m6502_parseOptions (int *pargc, char **argv, int *i)
 {
-  if (!strcmp (argv[*i], "--out-fmt-elf"))
-    {
-      options.out_fmt = 'E';
-      debugFile = &dwarf2DebugFile;
-      return TRUE;
-    }
-
   if (!strcmp (argv[*i], "--oldralloc"))
     {
       options.oldralloc = TRUE;
@@ -153,7 +146,6 @@ static OPTION _m6502_options[] =
   {
     {0, OPTION_SMALL_MODEL, NULL, "8-bit address space for data"},
     {0, OPTION_LARGE_MODEL, NULL, "16-bit address space for data (default)"},
-    {0, "--out-fmt-elf", NULL, "Output executable in ELF format" },
     {0, "--oldralloc", NULL, "Use old register allocator"},
     {0, NULL }
   };
@@ -201,8 +193,6 @@ _m6502_getRegName (const struct reg_info *reg)
 static void
 _m6502_genAssemblerPreamble (FILE * of)
 {
-  int i;
-  int needOrg = 1;
   symbol *mainExists=newSymbol("main", 0);
   mainExists->block=0;
 
@@ -229,24 +219,10 @@ _m6502_genAssemblerPreamble (FILE * of)
       fprintf (of, "__BASEPTR:\t.ds 2\n");
       // generate interrupt vector table (TODO)
       fprintf (of, "\t.area\tCODEIVT (ABS)\n");
-
-      for (i=maxInterrupts;i>0;i--)
-        {
-          if (interrupts[i])
-            {
-              if (needOrg)
-                {
-                  fprintf (of, "\t.org\t0x%04x\n", (0xfffe - (i * 2)));
-                  needOrg = 0;
-                }
-              fprintf (of, "\t.dw\t%s\n", interrupts[i]->rname);
-            }
-          else
-            needOrg = 1;
-        }
-      if (needOrg)
-        fprintf (of, "\t.org\t0xfffe\n");
-      fprintf (of, "\t.dw\t%s", "__sdcc_gs_init_startup\n\n");
+      fprintf (of, "\t.org\t0xfffa\n");
+      fprintf (of, "\t.dw\t%s", "__sdcc_gs_init_startup\n");
+      fprintf (of, "\t.dw\t%s", "__sdcc_gs_init_startup\n");
+      fprintf (of, "\t.dw\t%s", "__sdcc_gs_init_startup\n");
 
       fprintf (of, "\t.area GSINIT0\n");
       fprintf (of, "__sdcc_gs_init_startup:\n");
@@ -312,9 +288,9 @@ _m6502_genIVT (struct dbuf_s * oBuf, symbol ** interrupts, int maxInterrupts)
 
   dbuf_printf (oBuf, "\t.area\tCODEIVT (ABS)\n");
   dbuf_printf (oBuf, "\t.org\t0x%04x\n",
-    (0xfffe - (maxInterrupts * 2)));
+    (0xfffe - 2 - (maxInterrupts * 2)));
 
-  for (i=maxInterrupts;i>0;i--)
+  for (i=maxInterrupts;i>1;i--)
     {
       if (interrupts[i])
         dbuf_printf (oBuf, "\t.dw\t%s\n", interrupts[i]->rname);
@@ -322,6 +298,13 @@ _m6502_genIVT (struct dbuf_s * oBuf, symbol ** interrupts, int maxInterrupts)
         dbuf_printf (oBuf, "\t.dw\t0xffff\n");
     }
   dbuf_printf (oBuf, "\t.dw\t%s", "__sdcc_gs_init_startup\n");
+  if (maxInterrupts > 0)
+    {
+      if (interrupts[0])
+        dbuf_printf (oBuf, "\t.dw\t%s\n", interrupts[0]->rname);
+      else
+        dbuf_printf (oBuf, "\t.dw\t0xffff\n");
+    }
 
   return TRUE;
 }

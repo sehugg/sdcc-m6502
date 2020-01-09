@@ -17,10 +17,17 @@ include $(srcdir)/../incl.mk
 M6502_FLOAT = $(COMMON_FLOAT)
 
 M6502_INT = $(COMMON_INT) \
-  _divsint.c \
+  _muluchar.c \
+  _mulschar.c \
+  _mulint.c \
+  _divuchar.c \
+  _divschar.c \
   _divuint.c \
-  _modsint.c \
-  _moduint.c
+  _divsint.c \
+  _moduchar.c \
+  _modschar.c \
+  _moduint.c \
+  _modsint.c
 
 M6502_LONG = $(COMMON_LONG) \
   _mullong.c \
