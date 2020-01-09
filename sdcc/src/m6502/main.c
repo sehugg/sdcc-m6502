@@ -215,6 +215,7 @@ _m6502_genAssemblerPreamble (FILE * of)
   fprintf (of, "\t.area %s\n",port->mem.const_name);
   fprintf (of, "\t.area %s\n",port->mem.data_name);
   fprintf (of, "\t.globl __TEMP\n");
+  fprintf (of, "\t.globl __BASEPTR\n");
   fprintf (of, "\t.area %s\n",port->mem.overlay_name);
   fprintf (of, "\t.area %s\n",port->mem.xdata_name);
   fprintf (of, "\t.area %s\n",port->mem.xidata_name);
@@ -225,6 +226,7 @@ _m6502_genAssemblerPreamble (FILE * of)
       // global variables in zero page
       fprintf (of, "\t.area %s\n",port->mem.data_name);
       fprintf (of, "__TEMP:\t.ds 8\n");
+      fprintf (of, "__BASEPTR:\t.ds 2\n");
       // generate interrupt vector table (TODO)
       fprintf (of, "\t.area\tCODEIVT (ABS)\n");
 
