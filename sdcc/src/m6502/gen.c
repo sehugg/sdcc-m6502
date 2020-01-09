@@ -5477,7 +5477,7 @@ genAnd (iCode * ic, iCode * ifx)
     {
       if (bitpos >= 0 && (bitpos & 7) == 7)
         {
-          rmwWithAop ("bit", AOP (left), bitpos >> 3);
+          rmwWithAop ("bit5", AOP (left), bitpos >> 3);
           genIfxJump (ifx, "n");
           goto release;
         }
@@ -5485,7 +5485,12 @@ genAnd (iCode * ic, iCode * ifx)
 
   if (AOP_TYPE (result) == AOP_CRY && size == 1 && (IS_AOP_A (AOP (left)) || IS_AOP_A (AOP (right))))
     {
-      if (IS_AOP_A (AOP (left)))
+      bool adead = m6502_reg_a->isDead;
+      if (IS_AOP_A (AOP (left)) && adead)
+        accopWithAop ("and", AOP (right), 0);
+      else if (IS_AOP_A (AOP (right)) && adead)
+        accopWithAop ("and", AOP (left), 0);
+      else if (IS_AOP_A (AOP (left)))
         accopWithAop ("bit6", AOP (right), 0);
       else
         accopWithAop ("bit7", AOP (left), 0);
@@ -8436,11 +8441,11 @@ genPackBitsImmed (operand * result, operand * left, sym_link * etype, operand * 
       emitcode ("and", "#0x%02x", (~mask) & 0xff);
       regalloc_dry_run_cost += 2;
       m6502_dirtyReg (m6502_reg_a, FALSE);
-      pushReg (m6502_reg_a, TRUE);
+      storeRegTemp(m6502_reg_a, TRUE);
 
       loadRegFromAop (m6502_reg_a, derefaop, 0);
       emitcode ("and", "#0x%02x", mask);
-      emitcode ("ora20", "1,s");
+      emitcode ("ora", TEMP0);
       regalloc_dry_run_cost += 5;
       storeRegToAop (m6502_reg_a, derefaop, 0);
       pullReg (m6502_reg_a);
