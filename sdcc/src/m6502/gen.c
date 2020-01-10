@@ -55,6 +55,7 @@ static char *TEMP1 = "(__TEMP+1)";
 static char *TEMP2 = "(__TEMP+2)";
 static char *TEMP3 = "(__TEMP+3)";
 
+// TODO: need to push/pop
 static char *BASEPTR = "(__BASEPTR)";
 
 const int STACK_TOP = 0x100 - 1; // TODO: use symbols
@@ -1711,10 +1712,9 @@ accopWithAop (char *accop, asmop *aop, int loffset)
     }
   else if (aop->type == AOP_REG)
     {
-      pushReg (aop->aopu.aop_reg[loffset], FALSE);
+      storeRegTemp (aop->aopu.aop_reg[loffset], TRUE);
       emitcode (accop, TEMP0);
       regalloc_dry_run_cost += 3;
-      pullNull (1);
     }
   else
     {
@@ -5439,10 +5439,8 @@ genAnd (iCode * ic, iCode * ifx)
   aopOp ((right = IC_RIGHT (ic)), ic, FALSE);
   aopOp ((result = IC_RESULT (ic)), ic, TRUE);
 
-#ifdef DEBUG_TYPE
   DD (emitcode ("", "; Type res[%d] = l[%d]&r[%d]", AOP_TYPE (result), AOP_TYPE (left), AOP_TYPE (right)));
   DD (emitcode ("", "; Size res[%d] = l[%d]&r[%d]", AOP_SIZE (result), AOP_SIZE (left), AOP_SIZE (right)));
-#endif
 
   /* if left is a literal & right is not then exchange them */
   if (AOP_TYPE (left) == AOP_LIT && AOP_TYPE (right) != AOP_LIT)
@@ -5563,7 +5561,7 @@ genAnd (iCode * ic, iCode * ifx)
         accopWithAop ("and", AOP (left), 0);
       else if (IS_AOP_A (AOP (left)) && canBitOp(right))
         accopWithAop ("bit", AOP (right), 0);
-      else if (canBitOp(left))
+      else if (IS_AOP_A (AOP (right)) && canBitOp(left))
         accopWithAop ("bit", AOP (left), 0);
       else {
         storeRegTemp(m6502_reg_a, TRUE);
@@ -5592,7 +5590,31 @@ genAnd (iCode * ic, iCode * ifx)
             }
           else if (AOP_TYPE (right) == AOP_LIT && bytemask == 0xff)
             {
+              // TODO: what if A? are flags set?
               loadRegFromAop (m6502_reg_a, AOP(left), offset);
+              if (size)
+                {
+                  if (!tlbl && !regalloc_dry_run)
+                    tlbl = newiTempLabel (NULL);
+                  emitBranch ("bne", tlbl);
+                }
+            }
+          // don't clobber A
+          else if (IS_AOP_A(AOP(right)) || IS_AOP_XA(AOP(right)))
+            {
+              accopWithAop ("and", AOP(left), offset);
+              m6502_freeReg (m6502_reg_a);
+              if (size)
+                {
+                  if (!tlbl && !regalloc_dry_run)
+                    tlbl = newiTempLabel (NULL);
+                  emitBranch ("bne", tlbl);
+                }
+            }
+          else if (IS_AOP_A(AOP(left)) || IS_AOP_XA(AOP(left)))
+            {
+              accopWithAop ("and", AOP(right), offset);
+              m6502_freeReg (m6502_reg_a);
               if (size)
                 {
                   if (!tlbl && !regalloc_dry_run)
@@ -5602,6 +5624,7 @@ genAnd (iCode * ic, iCode * ifx)
             }
           else
             {
+              // TODO: fix other ops like this?
               loadRegFromAop (m6502_reg_a, AOP(right), offset);
               accopWithAop ("and", AOP(left), offset);
               m6502_freeReg (m6502_reg_a);
@@ -5707,10 +5730,8 @@ genOr (iCode * ic, iCode * ifx)
   aopOp ((right = IC_RIGHT (ic)), ic, FALSE);
   aopOp ((result = IC_RESULT (ic)), ic, TRUE);
 
-#ifdef DEBUG_TYPE
   DD (emitcode ("", "; Type res[%d] = l[%d]&r[%d]", AOP_TYPE (result), AOP_TYPE (left), AOP_TYPE (right)));
   DD (emitcode ("", "; Size res[%d] = l[%d]&r[%d]", AOP_SIZE (result), AOP_SIZE (left), AOP_SIZE (right)));
-#endif
 
   /* if left is a literal & right is not then exchange them */
   if (AOP_TYPE (left) == AOP_LIT && AOP_TYPE (right) != AOP_LIT)
@@ -5892,10 +5913,8 @@ genXor (iCode * ic, iCode * ifx)
   aopOp ((right = IC_RIGHT (ic)), ic, FALSE);
   aopOp ((result = IC_RESULT (ic)), ic, TRUE);
 
-#ifdef DEBUG_TYPE
   DD (emitcode ("", "; Type res[%d] = l[%d]&r[%d]", AOP_TYPE (result), AOP_TYPE (left), AOP_TYPE (right)));
   DD (emitcode ("", "; Size res[%d] = l[%d]&r[%d]", AOP_SIZE (result), AOP_SIZE (left), AOP_SIZE (right)));
-#endif
 
   /* if left is a literal & right is not ||
      if left needs acc & right does not */
