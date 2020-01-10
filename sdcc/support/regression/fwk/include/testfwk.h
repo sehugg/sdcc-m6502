@@ -43,7 +43,7 @@ void __printf(const char *szFormat, ...);
 # define __at(x)
 #endif
 
-#if defined(__SDCC_hc08) || defined(__SDCC_s08)
+#if defined(__SDCC_hc08) || defined(__SDCC_s08) || defined(__SDCC_m6502) || defined(__SDCC_m65c02)
 # define __idata __data
 # define __pdata __data
 #endif

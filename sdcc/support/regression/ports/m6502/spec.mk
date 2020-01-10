@@ -41,7 +41,7 @@ include $(srcdir)/fwk/lib/spec.mk
 	$(AS) -plosgff $<
 
 %$(OBJEXT): %.c
-	$(SDCC) $(SDCCFLAGS) -c $< -o $@
+	$(VALGRIND) $(SDCC) $(SDCCFLAGS) -c $< -o $@
 
 $(PORT_CASES_DIR)/%$(OBJEXT): $(PORTS_DIR)/$(PORT)/%.c
 	$(SDCC) $(SDCCFLAGS) -c $< -o $@

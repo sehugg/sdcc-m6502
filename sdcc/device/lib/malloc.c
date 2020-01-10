@@ -50,7 +50,7 @@ header_t *HEAPSPACE __sdcc_heap_free; // First free block, 0 if no free blocks.
 extern header_t __sdcc_heap;
 #define HEAP_START &__sdcc_heap
 
-#if defined(__SDCC_mcs51) || defined(__SDCC_ds390) || defined(__SDCC_ds400) || defined(__SDCC_hc08) || defined(__SDCC_s08)
+#if defined(__SDCC_mcs51) || defined(__SDCC_ds390) || defined(__SDCC_ds400) || defined(__SDCC_hc08) || defined(__SDCC_s08) || defined(__SDCC_m6502) || defined(__SDCC_m65c02)
 
 extern const unsigned int __sdcc_heap_size;
 #define HEAP_END (struct header HEAPSPACE *)((char HEAPSPACE *)&__sdcc_heap + (__sdcc_heap_size - 1)) // -1 To be sure that HEAP_END is bigger than HEAP_START.
