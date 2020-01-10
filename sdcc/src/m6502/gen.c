@@ -603,6 +603,19 @@ pullOrFreeReg (reg_info * reg, bool needpull)
     m6502_freeReg (reg);
 }
 
+static void
+pullOrFreeRegNoFlags (reg_info * reg, bool needpull)
+{
+  if (needpull) {
+    emitcode("php", "");
+    pullReg (reg);
+    emitcode("plp", "");
+    regalloc_dry_run_cost += 2;
+  }
+  else
+    m6502_freeReg (reg);
+}
+
 /*--------------------------------------------------------------------------*/
 /* adjustStack - Adjust the stack pointer by n bytes.                       */
 /*--------------------------------------------------------------------------*/
@@ -665,6 +678,16 @@ adjustX (int n)
     regalloc_dry_run_cost++;
     n--;
   }
+}
+
+void pushFlags() {
+  emitcode("php", "");
+  regalloc_dry_run_cost += 1;
+}
+
+void pullFlags() {
+  emitcode("plp", "");
+  regalloc_dry_run_cost += 2;
 }
 
 #if DD(1) -1 == 0
@@ -5588,7 +5611,13 @@ genAnd (iCode * ic, iCode * ifx)
         accopWithAop ("bit", AOP (left), 0);
       else {
         storeRegTemp(m6502_reg_a, TRUE);
+        loadRegFromAop (m6502_reg_a, IS_AOP_A(AOP(left)) ? AOP(right) : AOP(left), offset);
         emitcode ("bit", TEMP0);
+        regalloc_dry_run_cost += 2;
+        // TODO: reload A without killing flags?
+        pushFlags();
+        loadRegTemp(m6502_reg_a, TRUE);
+        pullFlags();
         regalloc_dry_run_cost += 2;
       }
       genIfxJump (ifx, "a");
@@ -5622,8 +5651,8 @@ genAnd (iCode * ic, iCode * ifx)
                   emitBranch ("bne", tlbl);
                 }
             }
-          // don't clobber A
-          else if (IS_AOP_A(AOP(right)) || IS_AOP_XA(AOP(right)))
+          // don't clobber A (TODO: other ops?)
+          else if (IS_AOPOFS_A(AOP(right), offset))
             {
               accopWithAop ("and", AOP(left), offset);
               m6502_freeReg (m6502_reg_a);
@@ -5634,7 +5663,7 @@ genAnd (iCode * ic, iCode * ifx)
                   emitBranch ("bne", tlbl);
                 }
             }
-          else if (IS_AOP_A(AOP(left)) || IS_AOP_XA(AOP(left)))
+          else if (IS_AOPOFS_A(AOP(left), offset))
             {
               accopWithAop ("and", AOP(right), offset);
               m6502_freeReg (m6502_reg_a);
@@ -5663,10 +5692,13 @@ genAnd (iCode * ic, iCode * ifx)
       if (tlbl)
         emitLabel (tlbl);
 
-      pullOrFreeReg (m6502_reg_a, needpulla);
-
-      if (ifx)
+      // TODO: better way to preserve flags?
+      if (ifx) {
+        pullOrFreeRegNoFlags (m6502_reg_a, needpulla);
         genIfxJump (ifx, "a");
+      } else {
+        pullOrFreeReg (m6502_reg_a, needpulla);
+      }
       goto release;
     }
 
@@ -5800,7 +5832,7 @@ genOr (iCode * ic, iCode * ifx)
       emitcode ("ora", zero);
       regalloc_dry_run_cost++;
 
-      pullOrFreeReg (m6502_reg_a, needpulla);
+      pullOrFreeRegNoFlags (m6502_reg_a, needpulla);
 
       genIfxJump (ifx, "a");
 
@@ -5847,10 +5879,13 @@ genOr (iCode * ic, iCode * ifx)
       if (tlbl)
         emitLabel (tlbl);
 
-      pullOrFreeReg (m6502_reg_a, needpulla);
 
-      if (ifx)
+      if (ifx) {
+        pullOrFreeRegNoFlags (m6502_reg_a, needpulla);
         genIfxJump (ifx, "a");
+      } else {
+        pullOrFreeReg (m6502_reg_a, needpulla);
+      }
 
       goto release;
     }
@@ -5988,9 +6023,12 @@ genXor (iCode * ic, iCode * ifx)
                */
               if (!regalloc_dry_run)
                 emitLabel (tlbl);
-              pullOrFreeReg (m6502_reg_a, needpulla);
-              if (ifx)
+              if (ifx) {
+                pullOrFreeRegNoFlags (m6502_reg_a, needpulla);
                 genIfxJump (ifx, "a");
+              } else {
+                pullOrFreeReg (m6502_reg_a, needpulla);
+              }
             }
           offset++;
         }
@@ -7652,9 +7690,12 @@ genUnpackBits (operand * result, operand * left, operand * right, iCode * ifx)
           emitcode ("and", "#0x%02x", (((unsigned char) - 1) >> (8 - blen)) << bstr);
           regalloc_dry_run_cost += 2;
         }
+      emitcode("php", "");
       pullOrFreeReg (m6502_reg_h, needpullh);
       pullOrFreeReg (m6502_reg_x, needpullx);
       pullOrFreeReg (m6502_reg_a, needpulla);
+      emitcode("plp", "");
+      regalloc_dry_run_cost += 2;
       genIfxJump (ifx, "a");
       return;
     }
@@ -7973,6 +8014,7 @@ finish:
   if (delayed_a)
     pullReg (m6502_reg_a);
 
+    // TODO? wrong plac?
   pullOrFreeReg (m6502_reg_a, needpulla);
 }
 
@@ -8018,10 +8060,14 @@ genDataPointerGet (operand * left, operand * right, operand * result, iCode * ic
   freeAsmop (NULL, derefaop, ic, TRUE);
   freeAsmop (result, NULL, ic, TRUE);
 
-  pullOrFreeReg (m6502_reg_a, needpulla);
   if (ifx && !ifx->generated)
     {
+      pullOrFreeRegNoFlags (m6502_reg_a, needpulla);
       genIfxJump (ifx, "a");
+    }
+    else
+    {
+      pullOrFreeReg (m6502_reg_a, needpulla);
     }
 }
 
@@ -8257,9 +8303,12 @@ release:
       pi->generated = 1;
     }
 
+  emitcode("php", "");
   pullOrFreeReg (m6502_reg_a, needpulla);
   pullOrFreeReg (m6502_reg_h, needpullh);
   pullOrFreeReg (m6502_reg_x, needpullx);
+  emitcode("plp", "");
+  regalloc_dry_run_cost += 2;
 
   if (ifx && !ifx->generated)
     {
