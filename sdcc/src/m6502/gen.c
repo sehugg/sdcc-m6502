@@ -92,13 +92,16 @@ static void updateiTempRegisterUse (operand * op);
 #define IS_AOP_A(x) ((x)->regmask == M6502MASK_A)
 #define IS_AOP_X(x) ((x)->regmask == M6502MASK_X)
 #define IS_AOP_H(x) ((x)->regmask == M6502MASK_H)
+#define IS_AOP_Y(x) ((x)->regmask == M6502MASK_H)
 #define IS_AOP_WITH_A(x) (((x)->regmask & M6502MASK_A) != 0)
 #define IS_AOP_WITH_X(x) (((x)->regmask & M6502MASK_X) != 0)
 #define IS_AOP_WITH_H(x) (((x)->regmask & M6502MASK_H) != 0)
+#define IS_AOP_WITH_Y(x) (((x)->regmask & M6502MASK_H) != 0)
 
 #define IS_AOPOFS_A(x,o) (((x)->type == AOP_REG) && ((x)->aopu.aop_reg[o]->mask == M6502MASK_A))
 #define IS_AOPOFS_X(x,o) (((x)->type == AOP_REG) && ((x)->aopu.aop_reg[o]->mask == M6502MASK_X))
 #define IS_AOPOFS_H(x,o) (((x)->type == AOP_REG) && ((x)->aopu.aop_reg[o]->mask == M6502MASK_H))
+#define IS_AOPOFS_Y(x,o) (((x)->type == AOP_REG) && ((x)->aopu.aop_reg[o]->mask == M6502MASK_H))
 
 
 #define LSB     0
@@ -123,11 +126,15 @@ emitSignedBranch (bool gt, bool eq, symbol * tlbl)
   // TODO: check this
   symbol *tlbl2 = newiTempLabel (NULL);
   symbol *tlbl3 = newiTempLabel (NULL);
+  if (eq && !gt)
+    emitcode ("beq", "%05d$", labelKey2num (tlbl->key));
+  if (!eq && gt)
+    emitcode ("beq", "%05d$", labelKey2num (tlbl2->key));
   emitcode (gt ? "bvs" : "bvc", "%05d$", labelKey2num (tlbl2->key));
-  emitcode (gt ? "bpl" : "bmi", "%05d$", labelKey2num (tlbl->key));
-  emitcode (gt ? "bmi" : "bpl", "%05d$", labelKey2num (tlbl3->key));
+  emitcode ("bpl", "%05d$", labelKey2num (tlbl->key));
+  emitcode ("bmi", "%05d$", labelKey2num (tlbl3->key));
   emitLabel (tlbl2);
-  emitcode (gt ? "bmi" : "bpl", "%05d$", labelKey2num (tlbl->key));
+  emitcode ("bmi", "%05d$", labelKey2num (tlbl->key));
   emitLabel (tlbl3);
 }
 
@@ -147,6 +154,9 @@ emitUnsignedBranch (bool gt, bool eq, symbol * tlbl)
   emitLabel (tlbl2);
 }
 
+// TODO: fix
+//#define emitSignedBranch emitUnsignedBranch
+
 static void
 emitBranch (char *branchop, symbol * tlbl)
 {
@@ -155,13 +165,13 @@ emitBranch (char *branchop, symbol * tlbl)
   } else if (!strcmp("bhi", branchop)) {
     emitUnsignedBranch(1, 0, tlbl);
   } else if (!strcmp("blt", branchop)) {
-    emitUnsignedBranch(0, 0, tlbl);
+    emitSignedBranch(0, 0, tlbl);
   } else if (!strcmp("bgt", branchop)) {
-    emitUnsignedBranch(1, 0, tlbl);
+    emitSignedBranch(1, 0, tlbl);
   } else if (!strcmp("ble", branchop)) {
-    emitUnsignedBranch(0, 1, tlbl);
+    emitSignedBranch(0, 1, tlbl);
   } else if (!strcmp("bge", branchop)) {
-    emitUnsignedBranch(1, 1, tlbl);
+    emitSignedBranch(1, 1, tlbl);
   } else {
     if (!IS_M65C02 && !strcmp(branchop, "bra"))
       branchop = "jmp";
@@ -1712,15 +1722,16 @@ accopWithAop (char *accop, asmop *aop, int loffset)
     }
   else if (aop->type == AOP_REG)
     {
+      // TODO
       storeRegTemp (aop->aopu.aop_reg[loffset], TRUE);
       emitcode (accop, TEMP0);
-      regalloc_dry_run_cost += 3;
+      regalloc_dry_run_cost += 2;
     }
   else
     {
       emitcode (accop, "%s", aopAdrStr (aop, loffset, FALSE));
       if (aop->type == AOP_DIR || aop->type == AOP_LIT)
-        regalloc_dry_run_cost +=2;
+        regalloc_dry_run_cost += 2;
       else
         regalloc_dry_run_cost += 3;
     }
@@ -3467,7 +3478,7 @@ genUminus (iCode * ic)
       if (left1 == m6502_reg_a)
         pushReg (left1, TRUE);
 
-      if (left0 == m6502_reg_a)
+      if (left0 == m6502_reg_a) // TODO?
         rmwWithReg ("neg", m6502_reg_a);
       else
         {
@@ -4935,13 +4946,14 @@ genCmp (iCode * ic, iCode * ifx)
 
   opcode = ic->op;
 
-  D (emitcode (";     genCmp", "(%s)", nameCmp (opcode)));
+  // TODO: optimize for cmp regs with 0 or constant
 
   result = IC_RESULT (ic);
   left = IC_LEFT (ic);
   right = IC_RIGHT (ic);
 
   sign = 0;
+  // TODO: don't use signed when unsigned will do
   if (IS_SPEC (operandType (left)) && IS_SPEC (operandType (right)))
     {
       letype = getSpec (operandType (left));
@@ -4962,6 +4974,7 @@ genCmp (iCode * ic, iCode * ifx)
       right = temp;
       opcode = exchangedCmp (opcode);
     }
+  // TODO: special case for compare with 0
 
   if (ifx)
     {
@@ -4979,9 +4992,15 @@ genCmp (iCode * ic, iCode * ifx)
 
   size = max (AOP_SIZE (left), AOP_SIZE (right));
 
+  D (emitcode (";     genCmp", "(%s, size %d, sign %d)", nameCmp (opcode), size, sign));
+  
   if (size == 1 && IS_AOP_X (AOP (left)))
     {
       accopWithAop ("cpx", AOP (right), offset);
+    }
+  else if (size == 1 && IS_AOP_Y (AOP (left)))
+    {
+      accopWithAop ("cpy", AOP (right), offset);
     }
   else if (size == 1 && IS_AOP_A (AOP (left)))
     {
@@ -4990,7 +5009,8 @@ genCmp (iCode * ic, iCode * ifx)
   else
     {
       offset = 0;
-      if (size == 1)
+      // need V flag for signed compare
+      if (size == 1 && sign == 0)
         sub = "cmp";
       else
         {
@@ -5058,15 +5078,16 @@ genCmp (iCode * ic, iCode * ifx)
       symbol *tlbl = (regalloc_dry_run ? 0 : newiTempLabel (NULL));
       char *inst;
 
-      pullOrFreeReg (m6502_reg_a, needpulla);
-
       freeAsmop (result, NULL, ic, TRUE);
+      // TODO: we can pull here if checking carry or overflow
 
       inst = branchInstCmp (opcode, sign);
       emitBranch (inst, tlbl);
+      pullOrFreeReg (m6502_reg_a, needpulla); // if check N or Z, we need to pull after flag check
       emitBranch ("jmp", jlbl);
       if (!regalloc_dry_run)
         emitLabel (tlbl);
+      pullOrFreeReg (m6502_reg_a, needpulla); // if check N or Z, we need to pull after flag check
 
       /* mark the icode as generated */
       ifx->generated = 1;
