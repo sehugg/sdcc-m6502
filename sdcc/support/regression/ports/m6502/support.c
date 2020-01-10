@@ -1,11 +1,11 @@
 
 // sim65 constants
-#define SYS_args  0xfff0
-#define SYS_exit  0xfff1
-#define SYS_open  0xfff2
-#define SYS_close 0xfff3
-#define SYS_read  0xfff4
-#define SYS_write 0xfff5
+#define SYS_open  0xfff4
+#define SYS_close 0xfff5
+#define SYS_read  0xfff6
+#define SYS_write 0xfff7
+#define SYS_args  0xfff8
+#define SYS_exit  0xfff9
 
 static unsigned char chout;
 
@@ -27,6 +27,6 @@ void
 _exitEmu(void)
 {
   __asm
-    jsr 0xfff1
+    jsr SYS_exit
   __endasm;
 }
