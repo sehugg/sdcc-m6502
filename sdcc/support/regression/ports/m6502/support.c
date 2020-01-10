@@ -7,15 +7,21 @@
 #define SYS_args  0xfff8
 #define SYS_exit  0xfff9
 
-static unsigned char chout;
-
 typedef void (*sim65_write_t)(int count, const char* buf, int fd) __reentrant;
+
+// sim65 expects a software stack
+unsigned short stack[8];
+
+// stack pointer location defined in sim65 header
+unsigned short* __at(0x0) stackptr;
 
 void
 _putchar(unsigned char c)
 {
-  chout = c;
-  (*(sim65_write_t)SYS_write)(1, &chout, 1);
+  stackptr = stack;
+  stackptr[0] = (short)&c;
+  stackptr[1] = 1;
+  (*(sim65_write_t)SYS_write)(1, &c, 1);
 }
 
 void

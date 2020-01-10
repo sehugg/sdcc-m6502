@@ -1478,7 +1478,7 @@ storeRegSignToUpperAop (reg_info * reg, asmop * aop, int loffset, bool isSigned)
     {
       /* Signed case */
       transferRegReg (reg, m6502_reg_a, FALSE);
-      emitcode ("rol", "a");
+      emitcode ("asl", "a");
       emitcode ("lda", zero);
       emitcode ("sbc", zero);
       regalloc_dry_run_cost += 5;
@@ -3259,6 +3259,7 @@ genCopy (operand * result, operand * source)
     aopOpExtToIdx (AOP (result), NULL, AOP (source));
 
   /* general case */
+  // TODO: sucks for copying registers
   DD (emitcode (";     genCopy (general case)", ""));
   bool needpula = pushRegIfUsed (m6502_reg_a);
   for (offset=0; offset<size; offset++) {
@@ -4565,6 +4566,7 @@ genMinusDec (iCode * ic)
     return FALSE;
     
   icount = (unsigned int) ulFromVal (AOP (IC_RIGHT (ic))->aopu.aop_lit);
+  // TODO: we should be able to dex/dey
 
   if ((icount > 1) || (icount < 0))
     return FALSE;
@@ -4595,7 +4597,7 @@ addSign (operand * result, int offset, int sign)
     {
       if (sign)
         {
-          emitcode ("rol", "a");
+          emitcode ("asl", "a");
           emitcode ("lda", zero);
           emitcode ("sbc", zero);
           m6502_dirtyReg (m6502_reg_a, FALSE);
