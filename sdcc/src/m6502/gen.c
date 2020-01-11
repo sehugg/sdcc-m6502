@@ -2266,12 +2266,17 @@ static void doTSX() {
   regalloc_dry_run_cost += 1;
 }
 
+// TODO: make these subroutines
 static void saveBasePtr() {
   storeRegTemp (m6502_reg_x, FALSE);
   doTSX();
   emitcode ("stx", BASEPTR);
   regalloc_dry_run_cost += 2;
   loadRegTemp (m6502_reg_x, FALSE);
+}
+
+static void restoreBasePtr() {
+  // TODO
 }
 
 /*-----------------------------------------------------------------*/
@@ -8688,7 +8693,6 @@ genPackBitsImmed (operand * result, operand * left, sym_link * etype, operand * 
       emitcode ("ora", TEMPFMT, _G.tempOfs - 1);
       regalloc_dry_run_cost += 5;
       storeRegToAop (m6502_reg_a, derefaop, 0);
-      pullReg (m6502_reg_a);
 
       pullOrFreeReg (m6502_reg_a, needpulla);
       loadRegTemp(NULL, TRUE);
@@ -8748,7 +8752,6 @@ genPackBitsImmed (operand * result, operand * left, sym_link * etype, operand * 
       emitcode ("ora", TEMPFMT, _G.stackOfs - 1);
       regalloc_dry_run_cost += 5;
       storeRegToAop (m6502_reg_a, derefaop, size - offset - 1);
-      pullReg (m6502_reg_a);
       pullOrFreeReg (m6502_reg_a, needpulla);
       loadRegTemp (NULL, TRUE);
     }
