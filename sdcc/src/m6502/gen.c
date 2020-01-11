@@ -3187,7 +3187,7 @@ asmopToBool (asmop *aop, bool resultInA)
       if (resultInA)
         needpula = FALSE;
       else
-        needpula = pushRegIfUsed (m6502_reg_a);
+        needpula = storeRegTemp (m6502_reg_a, TRUE);
       loadRegFromAop (m6502_reg_a, aop, offset--);
       if (isFloat)
         {
@@ -3197,7 +3197,11 @@ asmopToBool (asmop *aop, bool resultInA)
       while (--size)
         accopWithAop ("ora", aop, offset--);
       if (needpula)
-        pullReg (m6502_reg_a);
+        {
+          pushFlags();
+          loadRegTemp (m6502_reg_a, TRUE);
+          pullFlags();
+        }
       else
         {
           m6502_freeReg (m6502_reg_a);
@@ -5150,7 +5154,7 @@ genCmp (iCode * ic, iCode * ifx)
         {
           if (AOP_TYPE (right) == AOP_REG && AOP(right)->aopu.aop_reg[offset]->rIdx == A_IDX)
             {
-              storeRegTemp(m6502_reg_a, TRUE);
+              storeRegTemp(m6502_reg_a, TRUE); //TODO: FALSE?
               loadRegFromAop (m6502_reg_a, AOP (left), offset);
               if (!strcmp(sub, "sub")) {
                 emitcode ("sec", "");
@@ -5158,6 +5162,7 @@ genCmp (iCode * ic, iCode * ifx)
               } else {
                 emitcode (sub, TEMPFMT, _G.tempOfs - 1);
               }
+              loadRegTemp(m6502_reg_a, TRUE);
               regalloc_dry_run_cost += 3;
             }
           else
@@ -7776,7 +7781,7 @@ genUnpackBits (operand * result, operand * left, operand * right, iCode * ifx)
           emitcode ("and", "#0x%02x", (((unsigned char) - 1) >> (8 - blen)) << bstr);
           regalloc_dry_run_cost += 2;
         }
-      emitcode("php", "");
+      emitcode("php", "");//TODO
       pullOrFreeReg (m6502_reg_h, needpullh);
       pullOrFreeReg (m6502_reg_x, needpullx);
       pullOrFreeReg (m6502_reg_a, needpulla);
@@ -8380,7 +8385,7 @@ release:
       pi->generated = 1;
     }
 
-  emitcode("php", "");
+  emitcode("php", "");//TODO
   pullOrFreeReg (m6502_reg_a, needpulla);
   pullOrFreeReg (m6502_reg_h, needpullh);
   pullOrFreeReg (m6502_reg_x, needpullx);
@@ -10021,7 +10026,7 @@ genm6502Code (iCode *lic)
       if (!m6502_reg_xa->isFree)
         DD (emitcode ("", "; forgot to free xa"));
       if (_G.tempOfs != 0)
-        DD (emitcode("", "; forgot to free temp stack (%d)", _G.tempOfs));
+        DD (emitcode("ERROR", "; forgot to free temp stack (%d)", _G.tempOfs));
     }
 
   if (options.debug)
