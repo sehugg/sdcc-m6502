@@ -63,7 +63,7 @@ static char *TEMP3 = "(__TEMP+3)";
 // TODO: need to push/pop
 static char *BASEPTR = "(__BASEPTR)";
 
-const int STACK_TOP = 0x100 - 1; // TODO: use symbols
+const int STACK_TOP = 0x100 + 1; // TODO: use symbols
 
 unsigned fReturnSizeM6502 = 4;   /* shared with ralloc.c */
 
@@ -330,10 +330,10 @@ transferRegReg (reg_info *sreg, reg_info *dreg, bool freesrc)
 
   //dreg->aop = sreg->aop;
   //dreg->aopofs = sreg->aopofs;
+  m6502_dirtyReg (dreg, FALSE);
   dreg->isFree = FALSE;
   dreg->isLitConst = sreg->isLitConst;
   dreg->litConst = sreg->litConst;
-  //m6502_dirtyReg (dreg, FALSE);
   m6502_useReg (dreg);
 }
 
@@ -3059,7 +3059,7 @@ aopAdrStr (asmop * aop, int loffset, bool bit16)
           return rs;
         // try another way (TODO)
         } else if (m6502_reg_y->isDead) {
-          loadRegFromConst(m6502_reg_y, offset);
+          loadRegFromConst(m6502_reg_y, offset + 1); // + 1 offset
           return "[__BASEPTR],y"; // TODO: is base ptr loaded?
         } else {
           return "[__BASEPTR],y"; // TODO: is base ptr or Y loaded?
@@ -3073,7 +3073,7 @@ aopAdrStr (asmop * aop, int loffset, bool bit16)
         loadRegFromConst(m6502_reg_y, offset);
         return "[__TEMP],y"; // TODO: what if != 0 tempOfs?
       } else
-        return ",x";
+        return "ERROR,x"; // TODO: error
     }
 
   werror (E_INTERNAL_ERROR, __FILE__, __LINE__, "aopAdrStr got unsupported aop->type");
@@ -7225,6 +7225,7 @@ genLeftShift (iCode * ic)
     loadRegFromAop (m6502_reg_hx, AOP (left), 0);
   else if (IS_AOP_AX (AOP (result)) && IS_AOP_XA (AOP (left)) || IS_AOP_XA (AOP (result)) && IS_AOP_AX (AOP (left)))
     {
+      // TODO ???
       pushReg (m6502_reg_x, TRUE);
       emitcode("tax", "");
       regalloc_dry_run_cost++;
@@ -7644,6 +7645,7 @@ genRightShift (iCode * ic)
     loadRegFromAop (m6502_reg_hx, AOP (left), 0);
   else if (IS_AOP_AX (AOP (result)) && IS_AOP_XA (AOP (left)) || IS_AOP_XA (AOP (result)) && IS_AOP_AX (AOP (left)))
     {
+      // TODO ???
       pushReg (m6502_reg_x, TRUE);
       emitcode("tax", "");
       regalloc_dry_run_cost++;
@@ -9507,6 +9509,7 @@ genReceive (iCode * ic)
 
   if (ic->argreg && IS_AOP_HX (AOP (IC_RESULT (ic))) && (offset + (ic->argreg - 1)) == 0)
     {
+      // TODO??? 
       pushReg (m6502_reg_x, TRUE);
       emitcode ("tax", "");
       regalloc_dry_run_cost++;
