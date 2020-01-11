@@ -97,6 +97,20 @@ do_teststrpbrk (void)
 #endif
 }
 
+/** tests for strchr
+*/
+static void
+do_teststrchr (void)
+{
+#if !defined(__SDCC_pdk14) && !defined(__SDCC_pdk15) // Lack of memory
+  const char *test = "test";
+
+  ASSERT (strchr (test, 0) == test + 4);
+  ASSERT (strchr (test, 't') == test + 0);
+  ASSERT (strchr (test, 'e') == test + 1);
+#endif
+}
+
 /** tests for strrchr
 */
 static void

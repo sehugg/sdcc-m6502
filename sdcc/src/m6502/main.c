@@ -172,9 +172,9 @@ _m6502_finaliseOptions (void)
 static void
 _m6502_setDefaultOptions (void)
 {
-  options.code_loc = 0x8000;
-  options.data_loc = 0x40;	// TODO???
-  options.xdata_loc = 0;        /* 0 means immediately following data */
+  options.code_loc = 0x200;
+  options.data_loc = 0x20;	/* zero page */
+  options.xdata_loc = 0x8000;   /* 0 means immediately following data */
   options.stack_loc = 0x1ff;
   options.out_fmt = 's';        /* use motorola S19 output */
 

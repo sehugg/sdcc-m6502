@@ -1961,8 +1961,9 @@ loadRegIndexed (reg_info * reg, int offset, char * rematOfs)
           //loadRegFromConst(m6502_reg_h, offset);
           emitcode ("ldy", "#0x%02x", offset);
           emitcode ("lda", TEMPFMT_IY, _G.tempOfs - 2);
+          // TODO: isDead?
           loadRegTemp (m6502_reg_h->isFree ? NULL : m6502_reg_h, TRUE);
-          loadRegTemp (m6502_reg_x->isFree ? NULL : m6502_reg_x, TRUE);
+          loadRegTemp (NULL, TRUE); // x not changed
           regalloc_dry_run_cost += 5;
         }
       else
@@ -3279,6 +3280,7 @@ asmopToBool (asmop *aop, bool resultInA)
               m6502_freeReg (m6502_reg_a);
               flagsonly = FALSE;
             }
+          // TODO: can we assume a=0?
         }
     }
 
@@ -5286,19 +5288,18 @@ genCmpEQorNE (iCode * ic, iCode * ifx)
         {
           if (AOP_TYPE (left) == AOP_REG && AOP (left)->aopu.aop_reg[offset]->rIdx == X_IDX && isAddrSafe(left, m6502_reg_x))
             accopWithAop ("cpx", AOP (right), offset);
-          else if (AOP_TYPE (left) == AOP_REG && AOP (left)->aopu.aop_reg[offset]->rIdx == Y_IDX && isAddrSafe(left, m6502_reg_x))
+          else if (AOP_TYPE (left) == AOP_REG && AOP (left)->aopu.aop_reg[offset]->rIdx == Y_IDX && isAddrSafe(left, m6502_reg_y))
             accopWithAop ("cpy", AOP (right), offset);
           else
             {
             // TODO? why do we push when we could cpx?
               if (!(AOP_TYPE (left) == AOP_REG && AOP (left)->aopu.aop_reg[offset]->rIdx == A_IDX))
                 {
-                  needpulla = pushRegIfSurv (m6502_reg_a);
+                  needpulla = storeRegTempIfSurv (m6502_reg_a);
                   loadRegFromAop (m6502_reg_a, AOP (left), offset);
                 }
               accopWithAop ("cmp", AOP (right), offset);
-              if (!(AOP_TYPE (left) == AOP_REG && AOP (left)->aopu.aop_reg[offset]->rIdx == A_IDX))
-                pullOrFreeReg (m6502_reg_a, needpulla);
+              loadRegTempNoFlags (m6502_reg_a, needpulla);
               needpulla = FALSE;
             }
           if (size)
@@ -7781,11 +7782,11 @@ genUnpackBits (operand * result, operand * left, operand * right, iCode * ifx)
           emitcode ("and", "#0x%02x", (((unsigned char) - 1) >> (8 - blen)) << bstr);
           regalloc_dry_run_cost += 2;
         }
-      emitcode("php", "");//TODO
+//      emitcode("php", "");//TODO
       pullOrFreeReg (m6502_reg_h, needpullh);
       pullOrFreeReg (m6502_reg_x, needpullx);
       pullOrFreeReg (m6502_reg_a, needpulla);
-      emitcode("plp", "");
+//      emitcode("plp", "");
       regalloc_dry_run_cost += 2;
       genIfxJump (ifx, "a");
       return;
@@ -8383,11 +8384,11 @@ release:
       pi->generated = 1;
     }
 
-  emitcode("php", "");//TODO
+//  emitcode("php", "");//TODO
   pullOrFreeReg (m6502_reg_a, needpulla);
   pullOrFreeReg (m6502_reg_h, needpullh);
   pullOrFreeReg (m6502_reg_x, needpullx);
-  emitcode("plp", "");
+//  emitcode("plp", "");
   regalloc_dry_run_cost += 2;
 
   if (ifx && !ifx->generated)
@@ -8993,6 +8994,7 @@ genIfx (iCode * ic, iCode * popIc)
   if (popIc)
     genIpop (popIc);
 
+// TODO: redundant bne/beq 
   genIfxJump (ic, "a");
 
   ic->generated = 1;
