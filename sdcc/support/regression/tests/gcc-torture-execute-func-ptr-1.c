@@ -15,7 +15,7 @@ static double (*fp) (float a);
 void
 testTortureExecute (void)
 {
-#if !defined(__SDCC_hc08) && !defined(__SDCC_s08) && !defined(__SDCC_pdk14) && !defined(__SDCC_pdk15)
+#if !defined(__SDCC_hc08) && !defined(__SDCC_s08) && !defined(__SDCC_pdk14) && !defined(__SDCC_pdk15) && !defined(__SDCC_m6502) && !defined(__SDCC_m65c02)
   fp = f;
   if (fp ((float) 1) != 1.0)
     ASSERT (0);

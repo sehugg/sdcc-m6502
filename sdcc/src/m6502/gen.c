@@ -831,14 +831,6 @@ forceload:
   switch (regidx)
     {
     case X_IDX:
-      // no such thing as stx aa,x
-      if (aop->type == AOP_SOF) {
-        pushReg(m6502_reg_a, FALSE);
-        loadRegFromAop(m6502_reg_a, aop, loffset);
-        transferRegReg(m6502_reg_a, m6502_reg_x, FALSE);
-        pullReg(m6502_reg_a);
-        break;
-      }
     case A_IDX:
     case H_IDX:
       if (aop->type == AOP_REG)
@@ -851,6 +843,15 @@ forceload:
       else if (aop->type == AOP_LIT)
         {
           loadRegFromConst (reg, byteOfVal (aop->aopu.aop_lit, loffset));
+        }
+      // no such thing as stx aa,x
+      else if (aop->type == AOP_SOF && regidx != A_IDX)
+        {
+          pushReg(m6502_reg_a, FALSE);
+          loadRegFromAop(m6502_reg_a, aop, loffset);
+          transferRegReg(m6502_reg_a, reg, FALSE);
+          pullReg(m6502_reg_a);
+          break;
         }
       else
         {
@@ -4768,14 +4769,14 @@ genMinus (iCode * ic)
         pullReg (m6502_reg_a);
       if (AOP_TYPE (IC_RIGHT (ic)) == AOP_REG && AOP (IC_RIGHT (ic))->aopu.aop_reg[offset]->rIdx == A_IDX)
         {
-          pushReg (m6502_reg_a, TRUE);
+          storeRegTemp (m6502_reg_a, TRUE);
           loadRegFromAop (m6502_reg_a, leftOp, offset);
           if (carry)
             emitcode("sec", "");
-          emitcode ("sbc5", "1,s");
+          emitcode ("sbc", TEMPFMT, _G.tempOfs--);
           m6502_dirtyReg (m6502_reg_a, FALSE);
           regalloc_dry_run_cost += 3;
-          pullNull (1);
+          loadRegTemp (m6502_reg_a, TRUE);
         }
       else
         {
@@ -9225,11 +9226,11 @@ genJumpTab (iCode * ic)
   aopOp (IC_JTCOND (ic), ic, FALSE);
 
 // TODO
-  if (m6502_reg_x->isFree || m6502_reg_y->isFree)
     {
+      // use X or Y for index?
       bool isx = m6502_reg_x->isFree;
       reg_info* reg1 = isx ? m6502_reg_x : m6502_reg_y;
-      reg_info* reg2 = isx ? m6502_reg_y : m6502_reg_x;
+      bool needpullreg = pushRegIfUsed (reg1);
       /* get the condition into reg1 */
       loadRegFromAop (reg1, AOP (IC_JTCOND (ic)), 0);
       freeAsmop (IC_JTCOND (ic), NULL, ic, TRUE);
@@ -9237,49 +9238,26 @@ genJumpTab (iCode * ic)
       if (!regalloc_dry_run)
         {
           if (isx) {
-            emitcode ("ldy", "%05d$,x", labelKey2num (jtablo->key));
+            emitcode ("lda", "%05d$,x", labelKey2num (jtablo->key));
             storeRegTemp (m6502_reg_y, TRUE);
-            emitcode ("ldy", "%05d$,x", labelKey2num (jtabhi->key));
+            emitcode ("lda", "%05d$,x", labelKey2num (jtabhi->key));
             storeRegTemp (m6502_reg_y, TRUE);
           } else {
-            emitcode ("ldx", "%05d$,y", labelKey2num (jtablo->key));
+            emitcode ("lda", "%05d$,y", labelKey2num (jtablo->key));
             storeRegTemp (m6502_reg_x, TRUE);
-            emitcode ("ldx", "%05d$,y", labelKey2num (jtabhi->key));
+            emitcode ("lda", "%05d$,y", labelKey2num (jtabhi->key));
             storeRegTemp (m6502_reg_x, TRUE);
           }
         }
       regalloc_dry_run_cost += 6;
       loadRegTemp(NULL, TRUE);
       loadRegTemp(NULL, TRUE);
+      if (needpullreg) pullReg(reg1);
       emitcode ("jmp", TEMPFMT, _G.tempOfs);
       regalloc_dry_run_cost += 3;
 
       m6502_dirtyReg (m6502_reg_a, TRUE);
       m6502_dirtyReg (m6502_reg_hx, TRUE);
-    }
-  else
-    {
-      adjustStack (-2);
-      pushReg (m6502_reg_hx, TRUE);
-
-      /* get the condition into x */
-      loadRegFromAop (m6502_reg_x, AOP (IC_JTCOND (ic)), 0);
-      freeAsmop (IC_JTCOND (ic), NULL, ic, TRUE);
-      loadRegFromConst (m6502_reg_h, 0);
-
-      if (!regalloc_dry_run)
-        emitcode ("lda", "%05d$,x", labelKey2num (jtabhi->key));
-      emitcode ("sta23", "3,s");
-      if (!regalloc_dry_run)
-        emitcode ("lda", "%05d$,x", labelKey2num (jtablo->key));
-      emitcode ("sta24", "4,s");
-      regalloc_dry_run_cost += 12;
-
-      pullReg (m6502_reg_hx);
-      emitcode ("rts", "");
-      regalloc_dry_run_cost++;
-      _G.stackPushes -= 2;
-      updateCFA ();
     }
 
   /* now generate the jump labels */
