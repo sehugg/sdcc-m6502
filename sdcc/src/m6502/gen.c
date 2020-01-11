@@ -7906,6 +7906,7 @@ finish:
   pullOrFreeReg (m6502_reg_a, needpulla);
 }
 
+// does a BIT A with a constant, even for non-65C02
 void bitAConst(int val)
 {
   wassertl (val >= 0 && val <= 0xff, "bitAConst()");
@@ -8017,6 +8018,7 @@ genUnpackBitsImmed (operand * left, operand *right, operand * result, iCode * ic
       loadRegFromAop (m6502_reg_a, derefaop, 0);
       if (!ifx)
         {
+          // TODO: inefficient if just getting flags
           AccRsh (bstr, FALSE);
           emitcode ("and", "#0x%02x", ((unsigned char) - 1) >> (8 - blen));
           regalloc_dry_run_cost += 2;
@@ -8267,13 +8269,14 @@ genPointerGet (iCode * ic, iCode * pi, iCode * ifx)
   
     needpulla = pushRegIfSurv (m6502_reg_a);
     // use [aa,x] if only 1 byte
+    // TODO: if X is free and Y is not can we load X=0?
     if (size == 1 && litOffset == 0 && m6502_reg_x->isLitConst && m6502_reg_x->litConst == 0) {
       emitcode ("lda", "[%s,x]", aopAdrStr ( AOP(left), 0, TRUE ) );
       regalloc_dry_run_cost += 3;
       storeRegToAop (m6502_reg_a, AOP (result), 0);
     } else {
       // otherwise use [aa],y
-      needpullh = pushRegIfSurv (m6502_reg_h); // TODO: not needed if using (aa,x)
+      bool pullh = storeRegTempIfSurv (m6502_reg_h); // TODO: not needed if using (aa,x)
       if (IS_AOP_XA(AOP(result))) {
         // reverse order so A is last
         for (int i=size-1; i>=0; i--) {
@@ -8291,6 +8294,7 @@ genPointerGet (iCode * ic, iCode * pi, iCode * ifx)
           storeRegToAop (m6502_reg_a, AOP (result), i);
         }
       }
+      if (pullh) loadRegTemp(m6502_reg_h, TRUE);
     }
     goto release;
   }
@@ -8967,6 +8971,7 @@ release:
   pullOrFreeReg (m6502_reg_x, needpullx);
 }
 
+// TODO: genIfx sometimes does a cmp #0 but has flags already, peephole might fix
 /*-----------------------------------------------------------------*/
 /* genIfx - generate code for Ifx statement                        */
 /*-----------------------------------------------------------------*/

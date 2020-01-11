@@ -71,6 +71,7 @@ testBool(void)
 	s2.b = (z & 2);
 	ASSERT(s2.b);
 	s2.b = (bool)(z & 2);
+	s2.b1 = false;
 	ASSERT(s2.b);
 
 	E = true;
