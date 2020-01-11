@@ -1620,20 +1620,26 @@ transferAopAop (asmop *srcaop, int srcofs, asmop *dstaop, int dstofs)
       return;
     }
 
-//  DD(emitcode ("", "; transferAopAop (%s, %d, %s, %d)",
-//            aopName (srcaop), srcofs, aopName (dstaop), dstofs));
-//  DD(emitcode ("", "; srcaop->type = %d", srcaop->type));
-//  DD(emitcode ("", "; dstaop->type = %d", dstaop->type));
+  DD(emitcode ("", "; transferAopAop (%s, %d, %s, %d)",
+            aopName (srcaop), srcofs, aopName (dstaop), dstofs));
+//  DD(emitcode ("", "; srcaop->type = %d, regmask = %x", srcaop->type, srcaop->regmask));
+//  DD(emitcode ("", "; dstaop->type = %d, regmask = %x", dstaop->type, dstaop->regmask));
 
   if (dstofs >= dstaop->size)
     return;
+
+  // same registers and offset, no transfer
+  if (srcaop->type == AOP_REG && dstaop->type == AOP_REG)
+    {
+      transferRegReg(srcaop->aopu.aop_reg[srcofs], dstaop->aopu.aop_reg[dstofs], FALSE);
+      return;    
+    }
 
   if (srcaop->type == AOP_LIT)
     {
       storeConstToAop (byteOfVal (srcaop->aopu.aop_lit, srcofs), dstaop, dstofs);
       return;
     }
-    
   if (dstaop->type == AOP_REG)
     {
       reg = dstaop->aopu.aop_reg[dstofs];
@@ -3120,7 +3126,7 @@ asmopToBool (asmop *aop, bool resultInA)
         } else {
           storeRegTemp (m6502_reg_a, TRUE);
           loadRegFromAop (m6502_reg_a, aop, 0);
-          loadRegTempNoFlags (m6502_reg_a, TRUE);
+          loadRegTempNoFlags (m6502_reg_a, TRUE); // TODO?
         }
       }
       return;
@@ -3264,7 +3270,7 @@ asmopToBool (asmop *aop, bool resultInA)
         }
       else
         {
-          needpula = pushRegIfUsed (m6502_reg_a);
+          needpula = storeRegTemp (m6502_reg_a, TRUE); // TODO: ifSurv? resultInA?
           loadRegFromAop (m6502_reg_a, aop, offset--);
           if (isFloat)
             {
@@ -3274,7 +3280,7 @@ asmopToBool (asmop *aop, bool resultInA)
           while (--size)
             accopWithAop ("ora", aop, offset--);
           if (needpula)
-            pullReg (m6502_reg_a);
+            loadRegTempNoFlags (m6502_reg_a, TRUE);
           else
             {
               m6502_freeReg (m6502_reg_a);
@@ -5707,9 +5713,7 @@ genAnd (iCode * ic, iCode * ifx)
         loadRegFromAop (m6502_reg_a, IS_AOP_A(AOP(left)) ? AOP(right) : AOP(left), offset);
         emitcode ("bit", TEMPFMT, _G.tempOfs - 1);
         regalloc_dry_run_cost += 2;
-        // TODO: reload A without killing flags?
-        loadRegTempNoFlags(m6502_reg_a, TRUE);
-        regalloc_dry_run_cost += 2;
+        loadRegTempNoFlags(m6502_reg_a, TRUE); // preserve flags
       }
       genIfxJump (ifx, "a");
       goto release;
