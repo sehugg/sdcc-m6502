@@ -20,7 +20,7 @@ typedef void (*ONEARGFUNPTR)({type}) __reentrant;
 typedef long int (*FOURARGFUNPTR)(char, char, long int, long int) __reentrant;
 typedef {type} (*TYPEFUNPTR)({type}, {type}) __reentrant;
 
-int count;
+int count = 0; // not sure why testFunPtr() checks this
 FOURARGFUNPTR fafp;
 TYPEFUNPTR tfp;
 

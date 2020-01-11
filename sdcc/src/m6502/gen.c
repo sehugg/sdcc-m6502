@@ -52,6 +52,7 @@ static char *one = "#0x01";
 
 #define NUM_TEMP_REGS 4
 static char *TEMPFMT = "(__TEMP+%d)";
+static char *TEMPFMT_IND = "[__TEMP+%d]";
 static char *TEMPFMT_IY = "[(__TEMP+%d)],y";
 static char *TEMPFMT_IX = "[(__TEMP+%d),x]";
 static char *TEMP0 = "(__TEMP+0)";
@@ -482,6 +483,7 @@ pushReg (reg_info * reg, bool freereg)
       _G.stackPushes++;
       updateCFA ();
       break;
+    // TODO: use X/Y as temp instead of push?
     case X_IDX:
       if (IS_M65C02) {
         emitcode ("phx", "");
@@ -1653,13 +1655,11 @@ transferAopAop (asmop *srcaop, int srcofs, asmop *dstaop, int dstofs)
 
   afree = m6502_reg_a->isFree;
 
+  // TODO: pick reg based on if can load op?
   if (!reg)
     {
-      if (m6502_reg_a->isFree)
-        reg = m6502_reg_a;
-      else if (m6502_reg_x->isFree)
-        reg = m6502_reg_x;
-      else
+      reg = getFreeByteReg();
+      if (reg == NULL)
         {
           pushReg (m6502_reg_a, TRUE);
           needpula = TRUE;
@@ -2300,8 +2300,8 @@ aopForSym (iCode * ic, symbol * sym, bool result)
   if (IS_FUNC (sym->type))
     {
       sym->aop = aop = newAsmop (AOP_IMMD);
-      aop->aopu.aop_immd.aop_immd1 = Safe_calloc (1, strlen (sym->rname) + 1);
-      strcpy (aop->aopu.aop_immd.aop_immd1, sym->rname);
+      aop->aopu.aop_immd.aop_immd1 = Safe_calloc (1, strlen (sym->rname) + 1 + 6);
+      sprintf (aop->aopu.aop_immd.aop_immd1, "(%s - 1)", sym->rname); // function pointer; take back one for RTS
       aop->size = FARPTRSIZE;
       return aop;
     }
@@ -3703,12 +3703,11 @@ unsaveRegisters (iCode *ic)
 
 }
 
-
 /*-----------------------------------------------------------------*/
 /* pushSide -                                                      */
 /*-----------------------------------------------------------------*/
 static void
-pushSide (operand *oper, int size, iCode *ic, int delta)
+pushSide (operand *oper, int size, iCode *ic)
 {
   int offset = 0;
   bool xIsFree = m6502_reg_x->isFree;
@@ -4061,6 +4060,8 @@ genPcall (iCode * ic)
     {
       updateiTempRegisterUse (IC_LEFT (sendic));
     }
+
+  // TODO: handle DIR/EXT with jmp [aa] or jmp [aaaa]
   
   if (!IS_LITERAL (etype))
     {
@@ -4071,11 +4072,18 @@ genPcall (iCode * ic)
         emitLabel (tlbl);
       _G.stackPushes += 2;          /* account for the bsr return address now on stack */
       updateCFA ();
-
-  // TODO: use jmp(aa) or jmp(aaaa) 
-
       /* now push the function address */
-      pushSide (IC_LEFT (ic), FARPTRSIZE, ic, -1); // TODO: -1 delta isn't impl yet
+      pushSide (IC_LEFT (ic), FARPTRSIZE, ic); // -1 is baked into initialization
+
+      /* load into TEMP0-1 */
+      /*
+      asmop *tempaop = newAsmop (AOP_DIR);
+      tempaop->size = 2;
+      tempaop->aopu.aop_dir = "__TEMP";
+      transferAopAop( AOP(IC_LEFT(ic)), 0, tempaop, 0 );
+      transferAopAop( AOP(IC_LEFT(ic)), 1, tempaop, 1 );
+      _G.tempOfs += 2;
+      */
     }
 
   /* if send set is not empty then assign */
@@ -4088,7 +4096,9 @@ genPcall (iCode * ic)
   /* make the call */
   if (!IS_LITERAL (etype))
     {
-      emitcode ("rts", "");
+      emitcode("rts", "");
+      //emitcode("jmp", "[__TEMP]");
+      //_G.tempOfs -= 2;
       regalloc_dry_run_cost++;
 
       if (!regalloc_dry_run)
@@ -9271,14 +9281,14 @@ genJumpTab (iCode * ic)
       if (!regalloc_dry_run)
         {
           if (isx) {
-            emitcode ("lda", "%05d$,x", labelKey2num (jtablo->key));
+            emitcode ("ldy", "%05d$,x", labelKey2num (jtablo->key));
             storeRegTemp (m6502_reg_y, TRUE);
-            emitcode ("lda", "%05d$,x", labelKey2num (jtabhi->key));
+            emitcode ("ldy", "%05d$,x", labelKey2num (jtabhi->key));
             storeRegTemp (m6502_reg_y, TRUE);
           } else {
-            emitcode ("lda", "%05d$,y", labelKey2num (jtablo->key));
+            emitcode ("ldx", "%05d$,y", labelKey2num (jtablo->key));
             storeRegTemp (m6502_reg_x, TRUE);
-            emitcode ("lda", "%05d$,y", labelKey2num (jtabhi->key));
+            emitcode ("ldx", "%05d$,y", labelKey2num (jtabhi->key));
             storeRegTemp (m6502_reg_x, TRUE);
           }
         }
@@ -9286,7 +9296,7 @@ genJumpTab (iCode * ic)
       loadRegTemp(NULL, TRUE);
       loadRegTemp(NULL, TRUE);
       if (needpullreg) pullReg(reg1);
-      emitcode ("jmp", TEMPFMT, _G.tempOfs);
+      emitcode ("jmp", TEMPFMT_IND, _G.tempOfs);
       regalloc_dry_run_cost += 3;
 
       m6502_dirtyReg (m6502_reg_a, TRUE);

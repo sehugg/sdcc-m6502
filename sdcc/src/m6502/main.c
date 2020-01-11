@@ -230,9 +230,9 @@ _m6502_genAssemblerPreamble (FILE * of)
         {
           fprintf (of, "\tldx\t#0x%02x\n", options.stack_loc & 0xff);
           fprintf (of, "\ttxs\n");
+          fprintf (of, "\tldx\t#0x%02x\n", (options.stack_loc >> 8) & 0xff);
+          fprintf (of, "\tstx\t__BASEPTR+1\n");
         }
-      else
-        fprintf (of, "\trsp\n");
       fprintf (of, "\tjsr\t__sdcc_external_startup\n");
       fprintf (of, "\tbeq\t__sdcc_init_data\n");
       fprintf (of, "\tjmp\t__sdcc_program_startup\n");
