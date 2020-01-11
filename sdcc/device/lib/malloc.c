@@ -78,7 +78,7 @@ void *malloc(size_t size)
 	header_t *h;
 	header_t *HEAPSPACE *f;
 
-#if defined(__SDCC_mcs51) || defined(__SDCC_ds390) || defined(__SDCC_ds400) || defined(__SDCC_hc08) || defined(__SDCC_s08)
+#if defined(__SDCC_mcs51) || defined(__SDCC_ds390) || defined(__SDCC_ds400) || defined(__SDCC_hc08) || defined(__SDCC_s08) || defined(__SDCC_m6502) || defined(__SDCC_m65c02)
 	if(!__sdcc_heap_free)
 		__sdcc_heap_init();
 #endif

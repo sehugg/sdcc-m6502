@@ -1507,6 +1507,15 @@ storeImmToAop (char *c, asmop * aop, int loffset)
     }
 }
 
+static void signExtendA() 
+{
+      emitcode ("asl", "a");
+      emitcode ("lda", zero);
+      emitcode ("adc", "#0xff");
+      emitcode ("eor", "#0xff");
+      regalloc_dry_run_cost += 7;
+      m6502_dirtyReg (m6502_reg_a, FALSE);
+}
 
 /*--------------------------------------------------------------------------*/
 /* storeRegSignToUpperAop - If isSigned is true, the sign bit of register   */
@@ -1534,10 +1543,7 @@ storeRegSignToUpperAop (reg_info * reg, asmop * aop, int loffset, bool isSigned)
     {
       /* Signed case */
       transferRegReg (reg, m6502_reg_a, FALSE);
-      emitcode ("asl", "a");
-      emitcode ("lda", zero);
-      emitcode ("sbc", zero);
-      regalloc_dry_run_cost += 5;
+      signExtendA();
       m6502_useReg (m6502_reg_a);
       while (loffset < size)
         storeRegToAop (m6502_reg_a, aop, loffset++);
@@ -4755,11 +4761,7 @@ addSign (operand * result, int offset, int sign)
     {
       if (sign)
         {
-          emitcode ("asl", "a");
-          emitcode ("lda", zero);
-          emitcode ("sbc", zero);
-          m6502_dirtyReg (m6502_reg_a, FALSE);
-          regalloc_dry_run_cost += 5;
+          signExtendA();
           while (size--)
             storeRegToAop (m6502_reg_a, AOP (result), offset++);
         }
@@ -6581,7 +6583,7 @@ AccRsh (int shCount, bool sign)
       accopWithMisc ("rol", "a");
       accopWithMisc ("lda", zero);
       accopWithMisc ("rol", "a");
-      /* total: 3 cycles, 3 bytes */
+      /* total: 3 cycles, 4 bytes */
       return;
     }
 
@@ -7904,11 +7906,7 @@ finish:
       else
         {
           /* signed bitfield: sign extension with 0x00 or 0xff */
-          emitcode ("rol", "a");
-          emitcode ("lda", zero);
-          emitcode ("sbc", zero);
-          regalloc_dry_run_cost += 5;
-
+          signExtendA();
           while (rsize--)
             storeRegToAop (m6502_reg_a, AOP (result), offset++);
         }
@@ -8134,11 +8132,7 @@ finish:
             }
 
           /* signed bitfield: sign extension with 0x00 or 0xff */
-          emitcode ("rol", "a");
-          emitcode ("lda", zero);
-          emitcode ("sbc", zero);
-          regalloc_dry_run_cost += 5;
-
+          signExtendA();
           while (rsize--)
             storeRegToAop (m6502_reg_a, AOP (result), offset++);
         }
@@ -9411,9 +9405,7 @@ genCast (iCode * ic)
                 pushReg(m6502_reg_a, FALSE);
               if (AOP (result)->aopu.aop_reg[0] != m6502_reg_a)
                 loadRegFromAop (m6502_reg_a, AOP (right), 0);
-              accopWithMisc ("rol", "a");
-              accopWithMisc ("lda", zero);
-              accopWithMisc ("sbc", zero);
+              signExtendA();
               storeRegToAop (m6502_reg_a, AOP (result), 1);
               if (save_a)
                 pullReg(m6502_reg_a);
@@ -9493,9 +9485,7 @@ genCast (iCode * ic)
     }
   else if (size)
     {
-      accopWithMisc ("rol", "a");
-      accopWithMisc ("lda", zero);
-      accopWithMisc ("sbc", zero);
+      signExtendA();
       while (size--)
         storeRegToAop (m6502_reg_a, AOP (result), offset++);
     }
