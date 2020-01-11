@@ -1,1 +1,9 @@
-This file is deprecated.  Please see doc/README.txt.
+
+This is an attempt to port SDCC (Small Device C Compiler) to the
+MOS 6502/WDC 65C02.
+
+```
+sdcc -mm6502 -o . file.c
+```
+
+Right now it generates horrible code, slow and incorrect.

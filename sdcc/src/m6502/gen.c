@@ -350,12 +350,15 @@ updateCFA (void)
     debugFile->writeFrameAddress (NULL, m6502_reg_sp, 1 + _G.stackOfs + _G.stackPushes);
 }
 
+// TODO: free, or dead?
+
 static bool
 storeRegTemp (reg_info * reg, bool always) {
 
-  if (reg->isDead && !always)
+  if (reg->isFree && !always)
     return false;
-    
+
+// TODO: check bounds    
   int regidx = reg->rIdx;
   switch (regidx) {
     case A_IDX:
@@ -396,7 +399,7 @@ loadRegTemp (reg_info * reg, bool always) {
     return;
   }
 
-  if (reg->isDead && !always) {
+  if (reg->isFree && !always) {
     // assume we clobbered it
     if (!always)
       m6502_dirtyReg (reg, FALSE);
@@ -1948,13 +1951,13 @@ loadRegIndexed (reg_info * reg, int offset, char * rematOfs)
         }
       else if (!rematOfs && offset >= 0 && offset <= 0xff)
         {
-          storeRegTemp (m6502_reg_hx, TRUE);
+          storeRegTemp (m6502_reg_h, TRUE);
           // TODO: we reload this, so can't do it
           //loadRegFromConst(m6502_reg_h, offset);
           emitcode ("ldy", "#0x%02x", offset);
           regalloc_dry_run_cost += 2;
           emitcode ("lda", TEMPFMT_IY, _G.stackOfs - 2);
-          loadRegTemp (m6502_reg_hx, FALSE); // TODO: only load if needed?
+          loadRegTemp (m6502_reg_h, FALSE); // TODO: only load if needed?
           regalloc_dry_run_cost += 3;
         }
       else
@@ -2030,22 +2033,44 @@ storeRegIndexed (reg_info * reg, int offset, char * rematOfs)
   switch (reg->rIdx)
     {
     case A_IDX:
-      if (rematOfs)
+      if (rematOfs && m6502_reg_y->isLitConst && m6502_reg_y->litConst == 0)
         {
-          if (!offset)
-            emitcode ("sta", "(%s),x", rematOfs);
-          else
-            emitcode ("sta", "(%s+%d),x", rematOfs, offset);
+          emitcode ("sta", "(%s+%d),x", rematOfs, offset);
+          regalloc_dry_run_cost += 3;
+        }
+      else if (!rematOfs && offset >= 0 && offset <= 0xff)
+        {
+          storeRegTemp (m6502_reg_h, TRUE);
+          // TODO: we reload this, so can't do it
+          //loadRegFromConst(m6502_reg_h, offset);
+          emitcode ("ldy", "#0x%02x", offset);
+          regalloc_dry_run_cost += 2;
+          emitcode ("sta", TEMPFMT_IY, _G.stackOfs - 2);
+          loadRegTemp (m6502_reg_h, FALSE); // TODO: only load if needed?
           regalloc_dry_run_cost += 3;
         }
       else
         {
-          storeRegTemp (m6502_reg_hx, TRUE);
-          loadRegFromConst(m6502_reg_h, offset);
-          emitcode ("sta", TEMPFMT_IY, _G.tempOfs - 2);
-          loadRegTemp (m6502_reg_hx, TRUE); // TODO?
-          regalloc_dry_run_cost += 3;
+          // add remat + offset + YX
+          // TODO: use tempOfs
+          // TODO: what if regs in use?
+          // TODO: offset
+          emitcode ("pha", "");
+          emitcode ("txa", "");
+          emitcode ("clc", "");
+          emitcode ("adc", "#<(%s+%d)", rematOfs, offset);
+          emitcode ("sta", "%s", TEMP0);
+          emitcode ("tya", "");
+          emitcode ("adc", "#>(%s+%d)", rematOfs, offset);
+          emitcode ("sta", "%s", TEMP1);
+          emitcode ("sty", "%s", TEMP2);
+          emitcode ("ldy", "#0x00");
+          emitcode ("pla", "");
+          emitcode ("sta", "[%s],y", TEMP0);
+          emitcode ("ldy", "%s", TEMP2); // TODO: if free only
+          regalloc_dry_run_cost += 14+4+2;
         }
+      m6502_dirtyReg (reg, FALSE);
       break;
     case X_IDX:
       needpula = pushRegIfUsed (m6502_reg_a);
@@ -3078,8 +3103,8 @@ asmopToBool (asmop *aop, bool resultInA)
       if (resultInA)
         loadRegFromAop (m6502_reg_a, aop, 0);
       // result -> flag
-      else if (aop->type == AOP_DIR || aop->type == AOP_EXT)
-        rmwWithAop ("bit", aop, 0);
+      //else if (aop->type == AOP_DIR || aop->type == AOP_EXT)
+      //  rmwWithAop ("bit", aop, 0);
       else {
         // ldx or ldy?
         reg_info* freereg = getFreeByteReg();
@@ -4983,7 +5008,7 @@ branchInstCmp (int opcode, int sign)
       if (sign)
         return "blt";
       else
-        return "bcs";           /* same as blo */
+        return "bcc";
     case '>':
       if (sign)
         return "bgt";
@@ -4998,7 +5023,7 @@ branchInstCmp (int opcode, int sign)
       if (sign)
         return "bge";
       else
-        return "bcc";           /* same as bhs */
+        return "bcs";
     case NE_OP:
       return "bne";
     case EQ_OP:
@@ -8890,12 +8915,11 @@ genPointerSet (iCode * ic, iCode * pi)
       decodePointerOffset (left, &litOffset, &rematOffset);
       needpulla = pushRegIfSurv (m6502_reg_a);
       loadRegFromAop (m6502_reg_hx, AOP (result), 0);
-      offset = size;
 
-      while (offset--) // TODO
+      for (offset=0; offset<size; offset++)
         {
           loadRegFromAop (m6502_reg_a, AOP (right), offset);
-          storeRegIndexed (m6502_reg_a, litOffset + size - offset - 1, rematOffset); // TODO: endian?
+          storeRegIndexed (m6502_reg_a, offset, rematOffset);
           m6502_freeReg (m6502_reg_a);
         }
     }
