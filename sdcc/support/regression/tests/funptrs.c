@@ -20,7 +20,7 @@ typedef void (*ONEARGFUNPTR)({type}) __reentrant;
 typedef long int (*FOURARGFUNPTR)(char, char, long int, long int) __reentrant;
 typedef {type} (*TYPEFUNPTR)({type}, {type}) __reentrant;
 
-int count = 0; // not sure why testFunPtr() checks this
+int count;
 FOURARGFUNPTR fafp;
 TYPEFUNPTR tfp;
 
@@ -99,7 +99,7 @@ testFunPtr(void)
 #if !defined(__SDCC_pdk14) // Lack of memory
   fafp = f6;
 
-  ASSERT(count == 0);
+  count = 0;
   callViaPtr(incCount);
   ASSERT(count == 1);
   callViaPtr2(incBy, 7);

@@ -2274,7 +2274,9 @@ static void doTSX() {
 // TODO: make these subroutines
 static void saveBasePtr() {
   storeRegTemp (m6502_reg_x, TRUE); // TODO: only when used?
-  doTSX();
+  // TODO: if X is free should we call doTSX() to mark X=S?
+  //doTSX();
+  emitcode ("tsx", "");
   emitcode ("stx", BASEPTR);
   regalloc_dry_run_cost += 2;
   loadRegTemp (m6502_reg_x, TRUE);
@@ -3145,7 +3147,7 @@ asmopToBool (asmop *aop, bool resultInA)
   if (resultInA && size == 1)
     {
       loadRegFromAop (m6502_reg_a, aop, 0);
-      rmwWithReg ("asl", m6502_reg_a);
+      emitcode ("cmp", one);
       loadRegFromConst (m6502_reg_a, 0);
       rmwWithReg ("rol", m6502_reg_a);
       return;
@@ -4229,13 +4231,13 @@ genFunction (iCode * ic)
      save h  */
   if (IFFUNC_ISISR (sym->type))
     {
-
       if (!inExcludeList ("h"))
         pushReg (m6502_reg_h, FALSE);
     }
 
   /* For some cases it is worthwhile to perform a RECEIVE iCode */
   /* before setting up the stack frame completely. */
+  int numStackParams = 0;
   while (ric && ric->next && ric->next->op == RECEIVE)
     ric = ric->next;
   while (ric && IC_RESULT (ric))
@@ -4260,7 +4262,7 @@ genFunction (iCode * ic)
           int ofs;
 
           genLine.lineElement.ic = ric;
-          D (emitcode (";     genReceive", ""));
+          D (emitcode (";     genReceive", "size=%d", rsymSize));
           for (ofs = 0; ofs < rsymSize; ofs++)
             {
               reg_info *reg = m6502_aop_pass[ofs + (ric->argreg - 1)]->aopu.aop_reg[0];
@@ -4279,7 +4281,11 @@ genFunction (iCode * ic)
   if (stackAdjust)
     {
       adjustStack (-stackAdjust);
-      saveBasePtr(); // TODO: what if no local stack vars?
+    }
+  // TODO: how to see if needed? how to count params?
+  if ( stackAdjust || sym->stack || numStackParams || IFFUNC_ISREENT(sym->type) )
+    {
+      saveBasePtr();
     }
   _G.stackOfs = sym->stack;
   _G.stackBaseOfs = sym->stack - stackAdjust;
@@ -5308,7 +5314,7 @@ genCmpEQorNE (iCode * ic, iCode * ifx)
     }
 
   size = max (AOP_SIZE (left), AOP_SIZE (right));
-
+// TODO: could clobber A if reg = XA?
     {
       offset = 0;
       while (size--)
@@ -5322,7 +5328,7 @@ genCmpEQorNE (iCode * ic, iCode * ifx)
             // TODO? why do we push when we could cpx?
               if (!(AOP_TYPE (left) == AOP_REG && AOP (left)->aopu.aop_reg[offset]->rIdx == A_IDX))
                 {
-                  needpulla = storeRegTempIfSurv (m6502_reg_a);
+                  needpulla = storeRegTemp (m6502_reg_a, TRUE); // TODO: always?
                   loadRegFromAop (m6502_reg_a, AOP (left), offset);
                 }
               accopWithAop ("cmp", AOP (right), offset);
@@ -7913,6 +7919,7 @@ finish:
 }
 
 // does a BIT A with a constant, even for non-65C02
+// TODO: lookup table for each new const?
 void bitAConst(int val)
 {
   wassertl (val >= 0 && val <= 0xff, "bitAConst()");
@@ -8064,7 +8071,7 @@ genUnpackBitsImmed (operand * left, operand *right, operand * result, iCode * ic
           pushReg (m6502_reg_a, TRUE);
           delayed_a = TRUE;
         }
-      loadRegFromAop (m6502_reg_a, derefaop, size - offset - 1);
+      loadRegFromAop (m6502_reg_a, derefaop, offset);
       if (!ifx)
         {
           storeRegToAop (m6502_reg_a, AOP (result), offset);
@@ -8087,7 +8094,7 @@ genUnpackBitsImmed (operand * left, operand *right, operand * result, iCode * ic
           pushReg (m6502_reg_a, TRUE);
           delayed_a = TRUE;
         }
-      loadRegFromAop (m6502_reg_a, derefaop, size - offset - 1);
+      loadRegFromAop (m6502_reg_a, derefaop, offset);
       emitcode ("and", "#0x%02x", ((unsigned char) - 1) >> (8 - rlen));
       regalloc_dry_run_cost += 2;
       if (!SPEC_USIGN (etype))
@@ -8715,7 +8722,7 @@ genPackBitsImmed (operand * result, operand * left, sym_link * etype, operand * 
   /* all except the partial byte at the end                 */
   for (rlen = blen; rlen >= 8; rlen -= 8)
     {
-      transferAopAop (AOP (right), offset, derefaop, size - offset - 1);
+      transferAopAop (AOP (right), offset, derefaop, offset);
       offset++;
     }
 
@@ -8732,7 +8739,7 @@ genPackBitsImmed (operand * result, operand * left, sym_link * etype, operand * 
           litval >>= (blen - rlen);
           litval &= (~mask) & 0xff;
           needpulla = pushRegIfSurv (m6502_reg_a);
-          loadRegFromAop (m6502_reg_a, derefaop, size - offset - 1);
+          loadRegFromAop (m6502_reg_a, derefaop, offset);
           if ((mask | litval) != 0xff)
             {
               emitcode ("and", "#0x%02x", mask);
@@ -8744,7 +8751,7 @@ genPackBitsImmed (operand * result, operand * left, sym_link * etype, operand * 
               regalloc_dry_run_cost += 2;
             }
           m6502_dirtyReg (m6502_reg_a, FALSE);
-          storeRegToAop (m6502_reg_a, derefaop, size - offset - 1);
+          storeRegToAop (m6502_reg_a, derefaop, offset);
           m6502_dirtyReg (m6502_reg_a, FALSE);
           pullOrFreeReg (m6502_reg_a, needpulla);
           goto release;
@@ -8759,11 +8766,11 @@ genPackBitsImmed (operand * result, operand * left, sym_link * etype, operand * 
       m6502_dirtyReg (m6502_reg_a, FALSE);
       storeRegTemp (m6502_reg_a, TRUE);
 
-      loadRegFromAop (m6502_reg_a, derefaop, size - offset - 1);
+      loadRegFromAop (m6502_reg_a, derefaop, offset);
       emitcode ("and", "#0x%02x", mask);
-      emitcode ("ora", TEMPFMT, _G.stackOfs - 1);
+      emitcode ("ora", TEMPFMT, _G.tempOfs - 1);
       regalloc_dry_run_cost += 5;
-      storeRegToAop (m6502_reg_a, derefaop, size - offset - 1);
+      storeRegToAop (m6502_reg_a, derefaop, offset);
       pullOrFreeReg (m6502_reg_a, needpulla);
       loadRegTemp (NULL, TRUE);
     }
