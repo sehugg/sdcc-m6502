@@ -1951,14 +1951,15 @@ loadRegIndexed (reg_info * reg, int offset, char * rematOfs)
         }
       else if (!rematOfs && offset >= 0 && offset <= 0xff)
         {
+          storeRegTemp (m6502_reg_x, TRUE);
           storeRegTemp (m6502_reg_h, TRUE);
           // TODO: we reload this, so can't do it
           //loadRegFromConst(m6502_reg_h, offset);
           emitcode ("ldy", "#0x%02x", offset);
-          regalloc_dry_run_cost += 2;
-          emitcode ("lda", TEMPFMT_IY, _G.stackOfs - 2);
-          loadRegTemp (m6502_reg_h, FALSE); // TODO: only load if needed?
-          regalloc_dry_run_cost += 3;
+          emitcode ("lda", TEMPFMT_IY, _G.tempOfs - 2);
+          loadRegTemp (m6502_reg_h->isFree ? NULL : m6502_reg_h, TRUE);
+          loadRegTemp (m6502_reg_x->isFree ? NULL : m6502_reg_x, TRUE);
+          regalloc_dry_run_cost += 5;
         }
       else
         {
@@ -2040,14 +2041,15 @@ storeRegIndexed (reg_info * reg, int offset, char * rematOfs)
         }
       else if (!rematOfs && offset >= 0 && offset <= 0xff)
         {
+          storeRegTemp (m6502_reg_x, TRUE);
           storeRegTemp (m6502_reg_h, TRUE);
           // TODO: we reload this, so can't do it
           //loadRegFromConst(m6502_reg_h, offset);
           emitcode ("ldy", "#0x%02x", offset);
-          regalloc_dry_run_cost += 2;
-          emitcode ("sta", TEMPFMT_IY, _G.stackOfs - 2);
-          loadRegTemp (m6502_reg_h, FALSE); // TODO: only load if needed?
-          regalloc_dry_run_cost += 3;
+          emitcode ("sta", TEMPFMT_IY, _G.tempOfs - 2);
+          loadRegTemp (m6502_reg_h->isFree ? NULL : m6502_reg_h, TRUE);
+          loadRegTemp (m6502_reg_x->isFree ? NULL : m6502_reg_x, TRUE);
+          regalloc_dry_run_cost += 5;
         }
       else
         {
@@ -5288,7 +5290,7 @@ genCmpEQorNE (iCode * ic, iCode * ifx)
             accopWithAop ("cpy", AOP (right), offset);
           else
             {
-            // TODO?
+            // TODO? why do we push when we could cpx?
               if (!(AOP_TYPE (left) == AOP_REG && AOP (left)->aopu.aop_reg[offset]->rIdx == A_IDX))
                 {
                   needpulla = pushRegIfSurv (m6502_reg_a);
