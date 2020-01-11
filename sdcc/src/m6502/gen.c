@@ -71,6 +71,7 @@ unsigned fReturnSizeM6502 = 4;   /* shared with ralloc.c */
 static struct
 {
   int stackOfs;
+  int stackBaseOfs;
   int stackPushes;
   set *sendSet;
   int tsxStackPushes;
@@ -167,7 +168,7 @@ static void
 emitBranch (char *branchop, symbol * tlbl)
 {
   if (!strcmp("bls", branchop)) {
-    emitUnsignedBranch(0, 0, tlbl);
+    emitUnsignedBranch(0, 1, tlbl);
   } else if (!strcmp("bhi", branchop)) {
     emitUnsignedBranch(1, 0, tlbl);
   } else if (!strcmp("blt", branchop)) {
@@ -648,13 +649,14 @@ pullOrFreeReg (reg_info * reg, bool needpull)
 /*--------------------------------------------------------------------------*/
 /* adjustStack - Adjust the stack pointer by n bytes.                       */
 /*--------------------------------------------------------------------------*/
+// TODO: optimize for 65C02
 static void
 adjustStack (int n)
 {
   _G.stackPushes -= n;
   if (n <= -14 || n >= 14) {
     // TODO: too big, consider subroutine
-    storeRegTemp(m6502_reg_xa, false);
+    storeRegTemp(m6502_reg_xa, true);
     emitcode ("tsx", "");
     emitcode ("txa", "");
     emitcode ("clc", "");
@@ -663,19 +665,22 @@ adjustStack (int n)
     emitcode ("txs", "");
     n = 0;
     regalloc_dry_run_cost += 8;
-    loadRegTemp(m6502_reg_xa, false);
+    loadRegTemp(m6502_reg_xa, true);
   }
   while (n < 0) {
     emitcode ("pha", "");      /* 1 byte,  2 cycles */
     regalloc_dry_run_cost++;
     n++;
   }
-  // TODO: what if A used?
-  while (n > 0) {
-    emitcode ("pla", "");      /* 1 byte,  2 cycles */
-    regalloc_dry_run_cost++;
-    n--;
-    m6502_dirtyReg (m6502_reg_a, FALSE);
+  // TODO: what if A not used?
+  if (n > 0) {
+    storeRegTemp(m6502_reg_a, true);
+    while (n > 0) {
+      emitcode ("pla", "");      /* 1 byte,  2 cycles */
+      regalloc_dry_run_cost++;
+      n--;
+    }
+    loadRegTemp(m6502_reg_a, true);
   }
   updateCFA ();
 }
@@ -2268,11 +2273,11 @@ static void doTSX() {
 
 // TODO: make these subroutines
 static void saveBasePtr() {
-  storeRegTemp (m6502_reg_x, FALSE);
+  storeRegTemp (m6502_reg_x, TRUE); // TODO: only when used?
   doTSX();
   emitcode ("stx", BASEPTR);
   regalloc_dry_run_cost += 2;
-  loadRegTemp (m6502_reg_x, FALSE);
+  loadRegTemp (m6502_reg_x, TRUE);
 }
 
 static void restoreBasePtr() {
@@ -3059,7 +3064,7 @@ aopAdrStr (asmop * aop, int loffset, bool bit16)
           return rs;
         // try another way (TODO)
         } else if (m6502_reg_y->isDead) {
-          loadRegFromConst(m6502_reg_y, offset + 1); // + 1 offset
+          loadRegFromConst(m6502_reg_y, _G.stackOfs + aop->aopu.aop_stk + offset + 1); // + 1 offset
           return "[__BASEPTR],y"; // TODO: is base ptr loaded?
         } else {
           return "[__BASEPTR],y"; // TODO: is base ptr or Y loaded?
@@ -4274,9 +4279,10 @@ genFunction (iCode * ic)
   if (stackAdjust)
     {
       adjustStack (-stackAdjust);
-      saveBasePtr();
+      saveBasePtr(); // TODO: what if no local stack vars?
     }
   _G.stackOfs = sym->stack;
+  _G.stackBaseOfs = sym->stack - stackAdjust;
   _G.stackPushes = 0;
 
   /* if critical function then turn interrupts off */
@@ -9280,32 +9286,34 @@ genJumpTab (iCode * ic)
 
 // TODO
     {
+      bool needpulla = pushRegIfSurv (m6502_reg_a);
       // use X or Y for index?
       bool isx = m6502_reg_x->isFree;
-      reg_info* reg1 = isx ? m6502_reg_x : m6502_reg_y;
-      bool needpullreg = pushRegIfUsed (reg1);
-      /* get the condition into reg1 */
-      loadRegFromAop (reg1, AOP (IC_JTCOND (ic)), 0);
+      reg_info* regidx = isx ? m6502_reg_x : m6502_reg_y;
+      bool needpullreg = pushRegIfSurv (regidx);
+      /* get the condition into regidx */
+      loadRegFromAop (regidx, AOP (IC_JTCOND (ic)), 0);
       freeAsmop (IC_JTCOND (ic), NULL, ic, TRUE);
 
       if (!regalloc_dry_run)
         {
           if (isx) {
-            emitcode ("ldy", "%05d$,x", labelKey2num (jtablo->key));
-            storeRegTemp (m6502_reg_y, TRUE);
-            emitcode ("ldy", "%05d$,x", labelKey2num (jtabhi->key));
-            storeRegTemp (m6502_reg_y, TRUE);
+            emitcode ("lda", "%05d$,x", labelKey2num (jtablo->key));
+            storeRegTemp (m6502_reg_a, TRUE);
+            emitcode ("lda", "%05d$,x", labelKey2num (jtabhi->key));
+            storeRegTemp (m6502_reg_a, TRUE);
           } else {
-            emitcode ("ldx", "%05d$,y", labelKey2num (jtablo->key));
-            storeRegTemp (m6502_reg_x, TRUE);
-            emitcode ("ldx", "%05d$,y", labelKey2num (jtabhi->key));
-            storeRegTemp (m6502_reg_x, TRUE);
+            emitcode ("lda", "%05d$,y", labelKey2num (jtablo->key));
+            storeRegTemp (m6502_reg_a, TRUE);
+            emitcode ("lda", "%05d$,y", labelKey2num (jtabhi->key));
+            storeRegTemp (m6502_reg_a, TRUE);
           }
         }
       regalloc_dry_run_cost += 6;
       loadRegTemp(NULL, TRUE);
       loadRegTemp(NULL, TRUE);
-      if (needpullreg) pullReg(reg1);
+      if (needpullreg) pullReg(regidx);
+      if (needpulla) pullReg(m6502_reg_a);
       emitcode ("jmp", TEMPFMT_IND, _G.tempOfs);
       regalloc_dry_run_cost += 3;
 
