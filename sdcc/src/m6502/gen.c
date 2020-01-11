@@ -50,6 +50,7 @@ static void pullOrFreeReg (reg_info * reg, bool needpull);
 static char *zero = "#0x00";
 static char *one = "#0x01";
 
+#define NUM_TEMP_REGS 4
 static char *TEMPFMT = "(__TEMP+%d)";
 static char *TEMPFMT_IY = "[(__TEMP+%d)],y";
 static char *TEMPFMT_IX = "[(__TEMP+%d),x]";
@@ -355,6 +356,8 @@ updateCFA (void)
 static bool
 storeRegTemp (reg_info * reg, bool always) {
 
+  DD (emitcode ("", "; storeRegTemp(%s) %d", reg ? reg->name : "-", always));
+
   if (reg->isFree && !always)
     return false;
 
@@ -387,6 +390,7 @@ storeRegTemp (reg_info * reg, bool always) {
       wassertl (0, "storeRegTemp()");
       break;
   }
+  wassertl (_G.tempOfs < NUM_TEMP_REGS, "storeRegTemp(): overflow");
   return true;
 }
 
@@ -434,6 +438,29 @@ loadRegTemp (reg_info * reg, bool always) {
       wassertl (0, "loadRegTemp()");
       break;
   }
+}
+
+// TODO: note that needpull has diff. semantics than loadRegTemp()
+static void
+loadRegTempNoFlags (reg_info * reg, bool needpull)
+{
+  if (needpull) {
+    emitcode("php", "");
+    loadRegTemp (reg, TRUE);
+    emitcode("plp", "");
+    regalloc_dry_run_cost += 2;
+  } else {
+    m6502_freeReg (reg);
+  }
+}
+
+static bool
+storeRegTempIfSurv (reg_info *reg)
+{
+  if (!reg->isDead)
+    return storeRegTemp (reg, TRUE);
+  else
+    return FALSE;
 }
 
 /*--------------------------------------------------------------------------*/
@@ -616,19 +643,6 @@ pullOrFreeReg (reg_info * reg, bool needpull)
     m6502_freeReg (reg);
 }
 
-static void
-pullOrFreeRegNoFlags (reg_info * reg, bool needpull)
-{
-  if (needpull) {
-    emitcode("php", "");
-    pullReg (reg);
-    emitcode("plp", "");
-    regalloc_dry_run_cost += 2;
-  }
-  else
-    m6502_freeReg (reg);
-}
-
 /*--------------------------------------------------------------------------*/
 /* adjustStack - Adjust the stack pointer by n bytes.                       */
 /*--------------------------------------------------------------------------*/
@@ -691,16 +705,6 @@ adjustX (int n)
     regalloc_dry_run_cost++;
     n--;
   }
-}
-
-void pushFlags() {
-  emitcode("php", "");
-  regalloc_dry_run_cost += 1;
-}
-
-void pullFlags() {
-  emitcode("plp", "");
-  regalloc_dry_run_cost += 2;
 }
 
 #if DD(1) -1 == 0
@@ -3113,11 +3117,9 @@ asmopToBool (asmop *aop, bool resultInA)
         if (freereg) {
           loadRegFromAop (freereg, aop, 0);
         } else {
-          pushReg (m6502_reg_a, FALSE);
+          storeRegTemp (m6502_reg_a, TRUE);
           loadRegFromAop (m6502_reg_a, aop, 0);
-          pushFlags ();
-          pullReg (m6502_reg_a);
-          pullFlags ();
+          loadRegTempNoFlags (m6502_reg_a, TRUE);
         }
       }
       return;
@@ -3200,9 +3202,7 @@ asmopToBool (asmop *aop, bool resultInA)
         accopWithAop ("ora", aop, offset--);
       if (needpula)
         {
-          pushFlags();
-          loadRegTemp (m6502_reg_a, TRUE);
-          pullFlags();
+          loadRegTempNoFlags (m6502_reg_a, TRUE);
         }
       else
         {
@@ -5707,9 +5707,7 @@ genAnd (iCode * ic, iCode * ifx)
         emitcode ("bit", TEMPFMT, _G.tempOfs - 1);
         regalloc_dry_run_cost += 2;
         // TODO: reload A without killing flags?
-        pushFlags();
-        loadRegTemp(m6502_reg_a, TRUE);
-        pullFlags();
+        loadRegTempNoFlags(m6502_reg_a, TRUE);
         regalloc_dry_run_cost += 2;
       }
       genIfxJump (ifx, "a");
@@ -5721,7 +5719,7 @@ genAnd (iCode * ic, iCode * ifx)
     {
       symbol *tlbl = NULL;
 
-      needpulla = pushRegIfSurv (m6502_reg_a);
+      needpulla = storeRegTempIfSurv (m6502_reg_a);
 
       offset = 0;
       while (size--)
@@ -5786,10 +5784,10 @@ genAnd (iCode * ic, iCode * ifx)
 
       // TODO: better way to preserve flags?
       if (ifx) {
-        pullOrFreeRegNoFlags (m6502_reg_a, needpulla);
+        loadRegTempNoFlags (m6502_reg_a, needpulla);
         genIfxJump (ifx, "a");
       } else {
-        pullOrFreeReg (m6502_reg_a, needpulla);
+        if (needpulla) loadRegTemp (NULL, TRUE);
       }
       goto release;
     }
@@ -5938,7 +5936,7 @@ genOr (iCode * ic, iCode * ifx)
     {
       symbol *tlbl = NULL;
 
-      needpulla = pushRegIfSurv (m6502_reg_a);
+      needpulla = storeRegTempIfSurv (m6502_reg_a);
 
       offset = 0;
       while (size--)
@@ -5974,10 +5972,10 @@ genOr (iCode * ic, iCode * ifx)
 
 
       if (ifx) {
-        pullOrFreeRegNoFlags (m6502_reg_a, needpulla);
+        loadRegTempNoFlags (m6502_reg_a, needpulla);
         genIfxJump (ifx, "a");
       } else {
-        pullOrFreeReg (m6502_reg_a, needpulla);
+        if (needpulla) loadRegTemp (NULL, TRUE);
       }
 
       goto release;
@@ -6084,7 +6082,7 @@ genXor (iCode * ic, iCode * ifx)
       left = tmp;
     }
 
-  needpulla = pushRegIfSurv (m6502_reg_a);
+  needpulla = storeRegTempIfSurv (m6502_reg_a);
 
   if (AOP_TYPE (result) == AOP_CRY)
     {
@@ -6117,10 +6115,10 @@ genXor (iCode * ic, iCode * ifx)
               if (!regalloc_dry_run)
                 emitLabel (tlbl);
               if (ifx) {
-                pullOrFreeRegNoFlags (m6502_reg_a, needpulla);
+                loadRegTempNoFlags (m6502_reg_a, needpulla);
                 genIfxJump (ifx, "a");
               } else {
-                pullOrFreeReg (m6502_reg_a, needpulla);
+                if (needpulla) loadRegTemp (NULL, TRUE);
               }
             }
           offset++;
@@ -6144,14 +6142,14 @@ genXor (iCode * ic, iCode * ifx)
       storeRegToAop (m6502_reg_a, AOP (result), offset);
       if (AOP_TYPE (result) == AOP_REG && size && AOP (result)->aopu.aop_reg[offset]->rIdx == A_IDX)
         {
-          pushReg (m6502_reg_a, TRUE);
+          storeRegTemp (m6502_reg_a, TRUE);
           needpulla = TRUE;
         }
       m6502_freeReg (m6502_reg_a);
       offset++;
     }
 
-  pullOrFreeReg (m6502_reg_a, needpulla);
+  if (needpulla) loadRegTemp (NULL, TRUE);
 
 release:
 
@@ -7895,9 +7893,7 @@ void bitAConst(int val)
   } else {
     storeRegTemp (m6502_reg_a, TRUE);
     emitcode ("and", "#0x%02x", val);
-    pushFlags();
-    loadRegTemp (m6502_reg_a, TRUE);
-    pullFlags();
+    loadRegTempNoFlags (m6502_reg_a, TRUE);
     regalloc_dry_run_cost += 2;
   }
 }
@@ -8151,7 +8147,7 @@ genDataPointerGet (operand * left, operand * right, operand * result, iCode * ic
   derefaop->size = size;
   
   if (ifx)
-    needpulla = pushRegIfSurv (m6502_reg_a);
+    needpulla = storeRegTempIfSurv (m6502_reg_a);
 
   if (IS_AOP_HX (AOP (result)))
     loadRegFromAop (m6502_reg_hx, derefaop, 0);
@@ -8169,12 +8165,12 @@ genDataPointerGet (operand * left, operand * right, operand * result, iCode * ic
 
   if (ifx && !ifx->generated)
     {
-      pullOrFreeRegNoFlags (m6502_reg_a, needpulla);
+      loadRegTempNoFlags (m6502_reg_a, needpulla);
       genIfxJump (ifx, "a");
     }
     else
     {
-      pullOrFreeReg (m6502_reg_a, needpulla);
+      if (needpulla) loadRegTemp (NULL, TRUE);
     }
 }
 
