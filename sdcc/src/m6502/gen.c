@@ -1078,41 +1078,21 @@ storeRegToAop (reg_info *reg, asmop * aop, int loffset)
         }
       break;
     case X_IDX:
+    case Y_IDX:
       if ((aop->type == AOP_REG) && (loffset < aop->size))
         transferRegReg (reg, aop->aopu.aop_reg[loffset], FALSE);
       else if (aop->type == AOP_SOF)
         {
           // TODO: push if live
+          bool needpulla = pushRegIfUsed (m6502_reg_a);
           transferRegReg (reg, m6502_reg_a, FALSE);
           storeRegToAop (m6502_reg_a, aop, loffset);
+          pullOrFreeReg (m6502_reg_a, needpulla);
         }
       else
         {
-          emitcode ("stx", "%s", aopAdrStr (aop, loffset, FALSE));
+          emitcode (regidx==X_IDX?"stx":"sty", "%s", aopAdrStr (aop, loffset, FALSE));
           regalloc_dry_run_cost += ((aop->type == AOP_DIR || aop->type == AOP_IMMD) ? 2 :3);
-        }
-      break;
-    case H_IDX:
-      if ((aop->type == AOP_REG) && (loffset < aop->size))
-        transferRegReg (reg, aop->aopu.aop_reg[loffset], FALSE);
-      else if (m6502_reg_a->isFree)
-        {
-          transferRegReg (m6502_reg_h, m6502_reg_a, FALSE);
-          storeRegToAop (m6502_reg_a, aop, loffset);
-          m6502_freeReg (m6502_reg_a);
-        }
-      else if (m6502_reg_x->isFree)
-        {
-          transferRegReg (m6502_reg_h, m6502_reg_x, FALSE);
-          storeRegToAop (m6502_reg_x, aop, loffset);
-          m6502_freeReg (m6502_reg_x);
-        }
-      else
-        {
-          pushReg (m6502_reg_a, TRUE);
-          transferRegReg (m6502_reg_h, m6502_reg_a, FALSE);
-          storeRegToAop (m6502_reg_a, aop, loffset);
-          pullReg (m6502_reg_a);
         }
       break;
     case HX_IDX:
@@ -1960,6 +1940,7 @@ loadRegIndexed (reg_info * reg, int offset, char * rematOfs)
   if (offset & 0x8000)
     offset = 0x10000 - offset;
 
+// TODO: mostly awful
   switch (reg->rIdx)
     {
     case A_IDX:
@@ -2006,7 +1987,6 @@ loadRegIndexed (reg_info * reg, int offset, char * rematOfs)
       break;
     case X_IDX:
     case H_IDX:	
-      // TODO
       pushReg (m6502_reg_a, FALSE);
       needpula = TRUE;
       loadRegIndexed (m6502_reg_a, offset, rematOfs);
@@ -2114,8 +2094,9 @@ storeRegIndexed (reg_info * reg, int offset, char * rematOfs)
       break;
     case XA_IDX:
       /* This case probably won't happen, but it's easy to implement */
-      storeRegIndexed (m6502_reg_x, offset, rematOfs);
-      storeRegIndexed (m6502_reg_a, offset+1, rematOfs);
+      /* SEH: it did happen in bug-1029883 */
+      storeRegIndexed (m6502_reg_x, offset+1, rematOfs);
+      storeRegIndexed (m6502_reg_a, offset, rematOfs);
       break;
     default:
       wassert (0);
