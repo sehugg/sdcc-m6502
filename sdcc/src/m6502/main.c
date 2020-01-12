@@ -239,9 +239,21 @@ _m6502_genAssemblerPreamble (FILE * of)
       fprintf (of, "__sdcc_init_data:\n");
 
       // TODO: what if l_XINIT > 255?
-      // TODO: .if > 0
-      // TODO: use memcpy()
+      // TODO: fprintf (of, "\t.ifgt\tl_XINIT\n");
+      fprintf (of, "\t.globl\t___memcpy\n");
       fprintf (of, "; _m6502_genXINIT() start\n");
+      fprintf (of, "        lda #<s_XINIT\n");
+      fprintf (of, "        sta ___memcpy_PARM_2\n");
+      fprintf (of, "        lda #>s_XINIT\n");
+      fprintf (of, "        sta ___memcpy_PARM_2+1\n");
+      fprintf (of, "        lda #<l_XINIT\n");
+      fprintf (of, "        sta ___memcpy_PARM_3\n");
+      fprintf (of, "        lda #>l_XINIT\n");
+      fprintf (of, "        sta ___memcpy_PARM_3+1\n");
+      fprintf (of, "        lda #<s_XISEG\n");
+      fprintf (of, "        ldx #>s_XISEG\n");
+      fprintf (of, "        jsr ___memcpy\n");
+      /*
       fprintf (of, "        ldx  #0\n");
       fprintf (of, "00001$:\n");
       fprintf (of, "        cpx  #l_XINIT\n");
@@ -251,12 +263,23 @@ _m6502_genAssemblerPreamble (FILE * of)
       fprintf (of, "        inx\n");
       fprintf (of, "        bne  00001$\n");
       fprintf (of, "00002$:\n");
+      */
       fprintf (of, "; _m6502_genXINIT() end\n");
+      //fprintf (of, "\t.endif\t0\n");
 
-      // TODO: what if l_XSEG > 255? (do we initialize to zeroes anyway?)
       // TODO: .if > 0
-      // TODO: use memset()
       fprintf (of, "; _m6502_genXSEG() start\n");
+      fprintf (of, "        lda #0x00\n");
+      fprintf (of, "        sta _memset_PARM_2\n");
+      fprintf (of, "        sta _memset_PARM_2+1\n");
+      fprintf (of, "        lda #<l_XSEG\n");
+      fprintf (of, "        sta _memset_PARM_3\n");
+      fprintf (of, "        lda #>l_XSEG\n");
+      fprintf (of, "        sta _memset_PARM_3+1\n");
+      fprintf (of, "        lda #<s_XSEG\n");
+      fprintf (of, "        ldx #>s_XSEG\n");
+      fprintf (of, "        jsr _memset\n");
+      /*
       fprintf (of, "        ldx  #0\n");
       fprintf (of, "        txa\n");
       fprintf (of, "00003$:\n");
@@ -266,6 +289,7 @@ _m6502_genAssemblerPreamble (FILE * of)
       fprintf (of, "        inx\n");
       fprintf (of, "        bne  00003$\n");
       fprintf (of, "00004$:\n");
+      */
       fprintf (of, "; _m6502_genXSEG() end\n");
 
       fprintf (of, "\t.area GSFINAL\n");
