@@ -1890,7 +1890,17 @@ rmwWithAop (char *rmwop, asmop * aop, int loffset)
       break;
     case AOP_DIR:
     case AOP_EXT:
+      // TODO: this sucks
+      if (!strcmp("asr", rmwop)) {
+        emitcode ("pha", "");
+        emitcode ("lda", aopAdrStr(aop, loffset, FALSE)); // load 
+        emitcode ("cmp", "#0x80");
+        emitcode ("pla", "");
+        rmwop = "ror";
+        regalloc_dry_run_cost += 7;
+      }
       emitcode (rmwop, aopAdrStr(aop, loffset, FALSE));
+      regalloc_dry_run_cost += ((aop->type == AOP_DIR || aop->type == AOP_IMMD) ? 2 : 3);
       break;
     case AOP_DUMMY:
       break;
@@ -7301,7 +7311,7 @@ genLeftShift (iCode * ic)
     }
   if (!regalloc_dry_run)
     emitcode (countreg == m6502_reg_a ? "dbnza" : (countreg ? "dbnzx" : "dbnz14 1,s"), "%05d$", labelKey2num (tlbl->key));
-  regalloc_dry_run_cost += (countreg ? 2 : 4);
+  regalloc_dry_run_cost += (countreg ? 3 : 5);
 
   if (!regalloc_dry_run)
     emitLabel (tlbl1);
@@ -7704,10 +7714,7 @@ genRightShift (iCode * ic)
   if (!regalloc_dry_run)
     emitLabel (tlbl);
 
-  shift = sign ? "ror" : "lsr";
-  if (sign) {
-    accopWithMisc ("cmp", "#0x80");
-  }
+  shift = sign ? "asr" : "lsr";
   for (offset = size - 1; offset >= 0; offset--)
     {
       rmwWithAop (shift, AOP (result), offset);
@@ -7716,7 +7723,7 @@ genRightShift (iCode * ic)
 
   if (!regalloc_dry_run)
     emitcode (countreg == m6502_reg_a ? "dbnza" : (countreg ? "dbnzx" : "dbnz17 1,s"), "%05d$", labelKey2num (tlbl->key));
-  regalloc_dry_run_cost += (countreg ? 2 : 4);
+  regalloc_dry_run_cost += (countreg ? 3 : 5);
 
   if (!regalloc_dry_run)
     emitLabel (tlbl1);

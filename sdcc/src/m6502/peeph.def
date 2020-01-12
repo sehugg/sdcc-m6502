@@ -51,7 +51,7 @@ replace {
 replace {
 	dbnza	%1
 } by {
-	clc
+	sec
 	sbc	#0x01
 	bne	%1
 }
