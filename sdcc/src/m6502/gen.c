@@ -3689,11 +3689,24 @@ saveRegisters (iCode *lic)
 
   if (!regalloc_dry_run)
     ic->regsSaved = 1;
+
+  DD (emitcode ("", "; saveRegisters"));
+  
+  // make sure not to clobber A
+  // TODO: why does isUsed not set?
+  // TODO: only clobbered if m6502_reg_a->isFree
+  bool clobbers_a = !IS_M65C02 
+    && (bitVectBitValue(ic->rSurv, X_IDX) || bitVectBitValue(ic->rSurv, Y_IDX))
+    && !bitVectBitValue(ic->rSurv, A_IDX);
+  if (clobbers_a)
+    storeRegTemp (m6502_reg_a, TRUE);
   for (i = A_IDX; i <= H_IDX; i++)
     {
       if (bitVectBitValue (ic->rSurv, i))
         pushReg (m6502_regWithIdx (i), FALSE);
     }
+  if (clobbers_a)
+    loadRegTemp (m6502_reg_a, TRUE);
 }
 
 /*-----------------------------------------------------------------*/
@@ -3703,6 +3716,8 @@ static void
 unsaveRegisters (iCode *ic)
 {
   int i;
+
+  DD (emitcode ("", "; unsaveRegisters"));
 
   for (i = H_IDX; i >= A_IDX; i--)
     {
@@ -3732,29 +3747,18 @@ pushSide (operand *oper, int size, iCode *ic)
           pushReg (AOP (oper)->aopu.aop_reg[offset], TRUE);
         }
     }
-  else if (m6502_reg_a->isFree)
+  else
     {
+      // push A if not free
+      // TODO: consider other regs for 65C02
+      bool restore_a = storeRegTemp(m6502_reg_a, FALSE);
       /* A is free, so piecewise load operand into a and push A */
       for (offset=size-1; offset>=0; offset--) 
         {
           loadRegFromAop (m6502_reg_a, AOP (oper), offset);
           pushReg (m6502_reg_a, TRUE);
         }
-    }
-  else
-    {
-      /* A is not free. Adjust stack, preserve A, copy operand */
-      /* into position on stack (using A), and restore original A */
-      adjustStack (-size);
-      pushReg (m6502_reg_a, TRUE);
-      doTSX();
-      for (offset=size-1; offset>=0; offset--) 
-        {
-          loadRegFromAop (m6502_reg_a, AOP (oper), offset);
-          emitcode ("sta", "%d,x", 2 + STACK_TOP + _G.stackOfs + _G.tsxStackPushes + offset); // TODO?
-          regalloc_dry_run_cost += 3;
-        }
-      pullReg (m6502_reg_a);
+      if (restore_a) loadRegTemp(m6502_reg_a, TRUE);
     }
 
   freeAsmop (oper, NULL, ic, TRUE);
