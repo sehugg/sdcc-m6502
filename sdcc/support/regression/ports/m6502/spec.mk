@@ -1,7 +1,7 @@
 # Regression test specification for the m6502 target running with uCsim
 
 # simulation timeout in cycles
-SIM_CYCLES = 100000000
+SIM_CYCLES = 1000000000
 SIM_TIMEOUT = 30
 
 # path to sim65

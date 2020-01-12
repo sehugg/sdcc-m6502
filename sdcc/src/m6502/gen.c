@@ -40,7 +40,7 @@
 #include "dbuf_string.h"
 
 extern int allocInfo;
-static int pushReg (reg_info * reg, bool freereg);
+static void pushReg (reg_info * reg, bool freereg);
 static void pullReg (reg_info * reg);
 static void transferAopAop (asmop * srcaop, int srcofs, asmop * dstaop, int dstofs);
 static void adjustStack (int n);
@@ -63,7 +63,7 @@ static char *TEMP3 = "(__TEMP+3)";
 // TODO: need to push/pop
 static char *BASEPTR = "(__BASEPTR)";
 
-const int STACK_TOP = 0x100 + 1; // TODO: use symbols
+const int STACK_TOP = 0x100; // TODO: use symbols
 
 unsigned fReturnSizeM6502 = 4;   /* shared with ralloc.c */
 
@@ -472,7 +472,7 @@ storeRegTempIfSurv (reg_info *reg)
 /* pushReg - Push register reg onto the stack. If freereg is true, reg is   */
 /*           marked free and available for reuse.                           */
 /*--------------------------------------------------------------------------*/
-static int
+static void
 pushReg (reg_info * reg, bool freereg)
 {
   int regidx = reg->rIdx;
@@ -531,7 +531,7 @@ pushReg (reg_info * reg, bool freereg)
     }
   if (freereg)
     m6502_freeReg (reg);
-  return -_G.stackOfs - _G.stackPushes;
+  //return -_G.stackOfs - _G.stackPushes;
 }
 
 static bool pushRegIfUsed (reg_info *reg);
@@ -1100,7 +1100,7 @@ storeRegToAop (reg_info *reg, asmop * aop, int loffset)
         }
       break;
     case HX_IDX:
-      if (aop->type == AOP_SOF) // TODO
+      if (aop->type == AOP_SOF) // TODO: will fail assemble
         {
           int offset = (_G.stackOfs + _G.stackPushes + aop->aopu.aop_stk + aop->size - loffset - 1);
           if (IS_M65C02 && offset >= 0 && offset <= 0xff)
@@ -1703,10 +1703,11 @@ forceStackedAop (asmop * aop, bool copyOrig)
     if (copyOrig)
       {
         loadRegFromAop (reg, aop, offset);
-        aopsof->aopu.aop_stk = pushReg (reg, FALSE);
+        pushReg (reg, FALSE);
       } else {
-        aopsof->aopu.aop_stk = pushReg (m6502_reg_a, FALSE);
+        pushReg (m6502_reg_a, FALSE);
       }
+    aopsof->aopu.aop_stk = -_G.stackOfs - _G.stackPushes;
     aopsof->op = aop->op;
     newaop->stk_aop[offset] = aopsof;
   }
@@ -3056,14 +3057,15 @@ aopAdrStr (asmop * aop, int loffset, bool bit16)
         }
         // did we get it?
         if (m6502_reg_x->aop == &tsxaop) {
-          xofs = STACK_TOP + _G.stackOfs + _G.tsxStackPushes + aop->aopu.aop_stk + offset;
+          // hc08's tsx returns +1, ours returns +0
+          xofs = STACK_TOP + _G.stackOfs + _G.tsxStackPushes + aop->aopu.aop_stk + offset + 1;
           sprintf (s, "%d,x", xofs);
           rs = Safe_calloc (1, strlen (s) + 1);
           strcpy (rs, s);
           return rs;
         // try another way (TODO)
         } else if (m6502_reg_y->isDead) {
-          loadRegFromConst(m6502_reg_y, _G.stackOfs + aop->aopu.aop_stk + offset + 1); // + 1 offset
+          loadRegFromConst(m6502_reg_y, _G.stackOfs + aop->aopu.aop_stk + offset + 1);
           return "[__BASEPTR],y"; // TODO: is base ptr loaded?
         } else {
           return "[__BASEPTR],y"; // TODO: is base ptr or Y loaded?
@@ -4289,7 +4291,7 @@ genFunction (iCode * ic)
       saveBasePtr();
     }
   _G.stackOfs = sym->stack;
-  _G.stackBaseOfs = sym->stack - stackAdjust;
+  _G.stackBaseOfs = _G.stackOfs;
   _G.stackPushes = 0;
 
   /* if critical function then turn interrupts off */
@@ -9048,7 +9050,7 @@ genAddrOf (iCode * ic)
       needpullx = pushRegIfSurv (m6502_reg_x);
       needpullh = pushRegIfSurv (m6502_reg_h);
       /* if it has an offset then we need to compute it */
-      offset = _G.stackOfs + _G.stackPushes + sym->stack; // TODO?
+      offset = _G.stackOfs + _G.stackPushes + sym->stack + 1;
       m6502_useReg (m6502_reg_hx);
       emitcode ("tsx", "");
       m6502_dirtyReg (m6502_reg_x, FALSE);
