@@ -9052,7 +9052,7 @@ genAddrOf (iCode * ic)
       m6502_useReg (m6502_reg_hx);
       emitcode ("tsx", "");
       m6502_dirtyReg (m6502_reg_x, FALSE);
-      loadRegFromConst(m6502_reg_h, 1); // stack top = 0x100
+      loadRegFromConst(m6502_reg_h, 0x01); // stack top = 0x100
       regalloc_dry_run_cost++;
       adjustX(offset);
       storeRegToFullAop (m6502_reg_hx, AOP (IC_RESULT (ic)), FALSE);
