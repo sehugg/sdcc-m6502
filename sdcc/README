@@ -7,3 +7,5 @@ sdcc -mm6502 -o . file.c
 ```
 
 Right now it generates horrible code, slow and incorrect.
+
+Regression testing requires installing sim65 from the cc65 project: https://cc65.github.io/
