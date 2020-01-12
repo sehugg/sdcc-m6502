@@ -1076,6 +1076,7 @@ storeRegToAop (reg_info *reg, asmop * aop, int loffset)
         transferRegReg (reg, aop->aopu.aop_reg[loffset], FALSE);
       else
         {
+          // TODO: i think this does not assemble?
           emitcode ("sta", "%s", aopAdrStr (aop, loffset, FALSE));
           regalloc_dry_run_cost += ((aop->type == AOP_DIR || aop->type == AOP_IMMD) ? 2 :3);
         }
@@ -2065,16 +2066,22 @@ storeRegIndexed (reg_info * reg, int offset, char * rematOfs)
           emitcode ("pha", "");
           emitcode ("txa", "");
           emitcode ("clc", "");
-          emitcode ("adc", "#<(%s+%d)", rematOfs, offset);
-          emitcode ("sta", "%s", TEMP0);
+          if (rematOfs)
+            emitcode ("adc", "#<(%s+%d)", rematOfs, offset);
+          else
+            emitcode ("adc", "#<(%d)", offset);
+          emitcode ("sta", TEMPFMT, _G.tempOfs+0);
           emitcode ("tya", "");
-          emitcode ("adc", "#>(%s+%d)", rematOfs, offset);
-          emitcode ("sta", "%s", TEMP1);
-          emitcode ("sty", "%s", TEMP2);
+          if (rematOfs)
+            emitcode ("adc", "#>(%s+%d)", rematOfs, offset);
+          else
+            emitcode ("adc", "#<(%d)", offset);
+          emitcode ("sta", TEMPFMT, _G.tempOfs+1);
+          emitcode ("sty", TEMPFMT, _G.tempOfs+2);
           emitcode ("ldy", "#0x00");
           emitcode ("pla", "");
-          emitcode ("sta", "[%s],y", TEMP0);
-          emitcode ("ldy", "%s", TEMP2); // TODO: if free only
+          emitcode ("sta", TEMPFMT_IY, _G.tempOfs+0); // [aa],y
+          emitcode ("ldy", TEMPFMT, _G.tempOfs+2); // TODO: if free only
           regalloc_dry_run_cost += 14+4+2;
         }
       m6502_dirtyReg (reg, FALSE);
@@ -8249,7 +8256,7 @@ genPointerGet (iCode * ic, iCode * pi, iCode * ifx)
 
   decodePointerOffset (right, &litOffset, &rematOffset);
 
-  D (emitcode ("", ";     genPointerGet (%s, %s, %s)", aopName(AOP(result)), aopName(AOP(left)), right?aopName(AOP(right)):"-" ));
+  D (emitcode ("", ";     genPointerGet (%s, %s) [ %d %s ]", aopName(AOP(result)), aopName(AOP(left)), litOffset, rematOffset ));
   
   // shortcut for [aa],y (or [aa,x]) if already in zero-page
   // and we're not storing to the pointer itself
@@ -8369,7 +8376,7 @@ genPointerGet (iCode * ic, iCode * pi, iCode * ifx)
       needpulla = pushRegIfSurv (m6502_reg_a);
       for (offset=0; offset<size; offset++)
         {
-          loadRegIndexed (m6502_reg_a, offset, rematOffset);
+          loadRegIndexed (m6502_reg_a, litOffset + offset, rematOffset);
           if (!ifx)
             storeRegToAop (m6502_reg_a, AOP (result), offset);
         }
@@ -8937,7 +8944,7 @@ genPointerSet (iCode * ic, iCode * pi)
       for (offset=0; offset<size; offset++)
         {
           loadRegFromAop (m6502_reg_a, AOP (right), offset);
-          storeRegIndexed (m6502_reg_a, offset, rematOffset);
+          storeRegIndexed (m6502_reg_a, litOffset + offset, rematOffset);
           m6502_freeReg (m6502_reg_a);
         }
     }
