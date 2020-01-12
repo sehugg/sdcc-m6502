@@ -1834,7 +1834,7 @@ rmwWithReg (char *rmwop, reg_info * reg)
         regalloc_dry_run_cost += 4;
       } else if (!strcmp(rmwop, "asr")) {
         accopWithMisc ("cmp", "#0x80");
-        emitcode ("lsr", "a");
+        emitcode ("ror", "a");
       } else if (!strcmp(rmwop, "bit")) { // TODO???
         accopWithMisc ("cmp", zero);
       } else {
@@ -6162,6 +6162,7 @@ genXor (iCode * ic, iCode * ifx)
 
   size = AOP_SIZE (result);
   offset = 0;
+  // TODO?
   if (size >= 2 && IS_AOP_AX (AOP (left)))
     {
       pushReg (m6502_reg_a, TRUE);
@@ -6183,7 +6184,7 @@ genXor (iCode * ic, iCode * ifx)
       offset++;
     }
 
-  if (needpulla) loadRegTemp (NULL, TRUE);
+  if (needpulla) loadRegTemp (m6502_reg_a, TRUE);
 
 release:
 
@@ -6332,6 +6333,7 @@ m6502_genInline (iCode * ic)
   genLine.lineElement.isInline -= (!options.asmpeep);
 }
 
+// TODO: are these called?
 /*-----------------------------------------------------------------*/
 /* genRRC - rotate right with carry                                */
 /*-----------------------------------------------------------------*/
@@ -6544,9 +6546,9 @@ AccSRsh (int shCount)
       return;
     }
 
-  // TODO: optimize?
+  // TODO: optimize? (asr?)
   for (i = 0; i < shCount; i++) {
-    accopWithMisc ("cmp", "#0x00");
+    accopWithMisc ("cmp", "#0x80");
     accopWithMisc ("ror", "a");
   }
 }
@@ -7458,7 +7460,7 @@ genrshFour (operand * result, operand * left, int shCount, int sign)
     }
   else if (shCount >= 8)
     {
-      if (shCount == 1)
+      if (shCount == 1) //TODO ?????
         {
           shiftRLong (left, MSB16, result, sign);
           return;
