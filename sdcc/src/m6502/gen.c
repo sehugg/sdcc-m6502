@@ -440,6 +440,9 @@ loadRegTemp (reg_info * reg, bool always) {
       wassertl (0, "loadRegTemp()");
       break;
   }
+  // TODO: should use stack to preserve state
+  m6502_useReg (reg);
+  m6502_dirtyReg (reg, FALSE);
 }
 
 // TODO: note that needpull has diff. semantics than loadRegTemp()
