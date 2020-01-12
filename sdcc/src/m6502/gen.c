@@ -2506,7 +2506,7 @@ static bool
 sameRegs (asmop * aop1, asmop * aop2)
 {
   int i;
-
+  
   if (aop1 == aop2)
     return TRUE;
 
@@ -8199,8 +8199,6 @@ genPointerGet (iCode * ic, iCode * pi, iCode * ifx)
   bool needpullx = FALSE;
   bool vol = FALSE;
 
-  D (emitcode (";     genPointerGet", ""));
-
   if ((size = getSize (operandType (result))) > 1)
     ifx = NULL;
 
@@ -8244,10 +8242,16 @@ genPointerGet (iCode * ic, iCode * pi, iCode * ifx)
         AOP (left)->aopu.aop_reg[i]->isDead = TRUE;
     }
 
+  // TODO? aopOp (right, ic, FALSE);
+
   decodePointerOffset (right, &litOffset, &rematOffset);
+
+  D (emitcode ("", ";     genPointerGet (%s, %s, %s)", aopName(AOP(result)), aopName(AOP(left)), right?aopName(AOP(right)):"-" ));
   
   // shortcut for [aa],y (or [aa,x]) if already in zero-page
-  if (AOP_TYPE (left) == AOP_DIR && size <= 2 && !rematOffset && litOffset >= 0 && litOffset <= 256-size) {
+  // and we're not storing to the pointer itself
+  if (AOP_TYPE (left) == AOP_DIR && size <= 2 && !rematOffset && litOffset >= 0 && litOffset <= 256-size
+      && !sameRegs(AOP(left), AOP(result)) ) {
   
     needpulla = pushRegIfSurv (m6502_reg_a);
     // use [aa,x] if only 1 byte
@@ -8809,8 +8813,6 @@ genPointerSet (iCode * ic, iCode * pi)
   int litOffset = 0;
   char *rematOffset = NULL;
 
-  D (emitcode (";     genPointerSet", ""));
-
   aopOp (result, ic, FALSE);
 
   /* if the result is rematerializable */
@@ -8839,8 +8841,12 @@ genPointerSet (iCode * ic, iCode * pi)
   aopOp (right, ic, FALSE);
   size = AOP_SIZE (right);
 
+  D (emitcode ("", ";     genPointerSet (%s, %s, %s)", aopName(AOP(result)), left?aopName(AOP(left)):"-", right?aopName(AOP(right)):"-" ));  
+
   // shortcut for [aa],y (or [aa,x]) if already in zero-page
-  if (AOP_TYPE (result) == AOP_DIR && size <= 2 && !rematOffset && litOffset >= 0 && litOffset <= 256-size) {
+  // and we're not storing to the same pointer location
+  if (AOP_TYPE (result) == AOP_DIR && size <= 2 && !rematOffset && litOffset >= 0 && litOffset <= 256-size
+      && !sameRegs(AOP(right), AOP(result)) ) {
   
     needpulla = pushRegIfSurv (m6502_reg_a);
     // use [aa,x] if only 1 byte
