@@ -2089,12 +2089,12 @@ storeRegIndexed (reg_info * reg, int offset, char * rematOfs)
       pullOrFreeReg (m6502_reg_a, needpula);
       break;
     case HX_IDX:
-      storeRegIndexed (m6502_reg_h, offset, rematOfs);
-      storeRegIndexed (m6502_reg_x, offset+1, rematOfs);
+      storeRegIndexed (m6502_reg_h, offset+1, rematOfs);
+      storeRegIndexed (m6502_reg_x, offset, rematOfs);
       break;
     case XA_IDX:
       /* This case probably won't happen, but it's easy to implement */
-      /* SEH: it did happen in bug-1029883 */
+      /* SEH: it did happen in bug-1029883? */
       storeRegIndexed (m6502_reg_x, offset+1, rematOfs);
       storeRegIndexed (m6502_reg_a, offset, rematOfs);
       break;
@@ -8888,9 +8888,9 @@ genPointerSet (iCode * ic, iCode * pi)
               pushReg (AOP (right)->aopu.aop_reg[1], TRUE);
               loadRegFromAop (m6502_reg_hx, AOP (result), 0);
               pullReg (m6502_reg_a);
-              storeRegIndexed (m6502_reg_a, litOffset, rematOffset);
-              pullReg (m6502_reg_a);
               storeRegIndexed (m6502_reg_a, litOffset+1, rematOffset);
+              pullReg (m6502_reg_a);
+              storeRegIndexed (m6502_reg_a, litOffset, rematOffset);
             }
           else
             {
@@ -8898,9 +8898,9 @@ genPointerSet (iCode * ic, iCode * pi)
               loadRegFromAop (m6502_reg_a, AOP (right), 0);
               pushReg (AOP (right)->aopu.aop_reg[1], TRUE);
               loadRegFromAop (m6502_reg_hx, AOP (result), 0);
-              storeRegIndexed (m6502_reg_a, litOffset+1, rematOffset);
-              pullReg (m6502_reg_a);
               storeRegIndexed (m6502_reg_a, litOffset, rematOffset);
+              pullReg (m6502_reg_a);
+              storeRegIndexed (m6502_reg_a, litOffset+1, rematOffset);
               m6502_freeReg (m6502_reg_a);
             }
         }
@@ -8909,9 +8909,9 @@ genPointerSet (iCode * ic, iCode * pi)
           needpulla = pushRegIfSurv (m6502_reg_a);
           pushReg (m6502_reg_x, TRUE);
           loadRegFromAop (m6502_reg_hx, AOP (result), 0);
-          storeRegIndexed (m6502_reg_a, litOffset, rematOffset);
-          pullReg (m6502_reg_a); /* original X value */
           storeRegIndexed (m6502_reg_a, litOffset+1, rematOffset);
+          pullReg (m6502_reg_a); // X
+          storeRegIndexed (m6502_reg_a, litOffset, rematOffset);
           m6502_freeReg (m6502_reg_a);
         }
       else
