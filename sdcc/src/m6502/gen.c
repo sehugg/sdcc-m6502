@@ -7352,6 +7352,7 @@ genLeftShift (iCode * ic)
   offset = 0;
   tlbl1 = (regalloc_dry_run ? 0 : newiTempLabel (NULL));
 
+//TODO: use y?
   if (m6502_reg_x->isDead && !IS_AOP_X (AOP (result)) && !IS_AOP_XA (AOP (result)) && !IS_AOP_AX (AOP (result)) && !IS_AOP_HX (AOP (result)))
     countreg = m6502_reg_x;
   else if (m6502_reg_a->isDead && !IS_AOP_A (AOP (result)) && !IS_AOP_XA (AOP (result)) && !IS_AOP_AX (AOP (result)))
@@ -7739,11 +7740,11 @@ genRightShift (iCode * ic)
     loadRegFromAop (m6502_reg_hx, AOP (left), 0);
   else if (IS_AOP_AX (AOP (result)) && IS_AOP_XA (AOP (left)) || IS_AOP_XA (AOP (result)) && IS_AOP_AX (AOP (left)))
     {
-      // TODO ???
-      pushReg (m6502_reg_x, TRUE);
+      // TODO: swap function
+      storeRegTemp (m6502_reg_x, TRUE);
       emitcode("tax", "");
       regalloc_dry_run_cost++;
-      pullReg (m6502_reg_a);
+      loadRegTemp (m6502_reg_a, TRUE);
     }
   else if (!sameRegs (AOP (left), aopResult))
     {
@@ -9604,11 +9605,10 @@ genReceive (iCode * ic)
 
   if (ic->argreg && IS_AOP_HX (AOP (IC_RESULT (ic))) && (offset + (ic->argreg - 1)) == 0)
     {
-      // TODO??? 
-      pushReg (m6502_reg_x, TRUE);
+      storeRegTemp (m6502_reg_x, TRUE);
       emitcode ("tax", "");
       regalloc_dry_run_cost++;
-      pullReg (m6502_reg_h);
+      loadRegTemp (m6502_reg_h, TRUE);
     }
   else if (ic->argreg)
     {
