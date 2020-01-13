@@ -71,7 +71,7 @@ unsigned fReturnSizeM6502 = 4;   /* shared with ralloc.c */
 static struct
 {
   int stackOfs;
-  int stackBaseOfs;
+  int funcHasBasePtr;
   int stackPushes;
   set *sendSet;
   int tsxStackPushes;
@@ -1617,8 +1617,8 @@ transferAopAop (asmop *srcaop, int srcofs, asmop *dstaop, int dstofs)
       return;
     }
 
-  DD(emitcode ("", "; transferAopAop (%s, %d, %s, %d)",
-            aopName (srcaop), srcofs, aopName (dstaop), dstofs));
+  DD(emitcode ("", "; transferAopAop from (%s, %d)", aopName (srcaop), srcofs));
+  DD(emitcode ("", "; transferAopAop to (%s, %d)", aopName (dstaop), dstofs));
 //  DD(emitcode ("", "; srcaop->type = %d, regmask = %x", srcaop->type, srcaop->regmask));
 //  DD(emitcode ("", "; dstaop->type = %d, regmask = %x", dstaop->type, dstaop->regmask));
 
@@ -4295,14 +4295,15 @@ genFunction (iCode * ic)
     {
       adjustStack (-stackAdjust);
     }
+  _G.stackOfs = sym->stack;
+  _G.stackPushes = 0;
+  _G.funcHasBasePtr = 0;
   // TODO: how to see if needed? how to count params?
   if ( stackAdjust || sym->stack || numStackParams || IFFUNC_ISREENT(sym->type) )
     {
       saveBasePtr();
+      _G.funcHasBasePtr = 1;
     }
-  _G.stackOfs = sym->stack;
-  _G.stackBaseOfs = _G.stackOfs;
-  _G.stackPushes = 0;
 
   /* if critical function then turn interrupts off */
   if (IFFUNC_ISCRITICAL (ftype))
@@ -4370,6 +4371,9 @@ genEndFunction (iCode * ic)
   if (IFFUNC_ISREENT (sym->type) || options.stackAuto)
     {
     }
+    
+  if (_G.funcHasBasePtr)
+    restoreBasePtr();
 
   if (sym->stack)
     {
@@ -8269,7 +8273,7 @@ genPointerGet (iCode * ic, iCode * pi, iCode * ifx)
 
   decodePointerOffset (right, &litOffset, &rematOffset);
 
-  D (emitcode ("", ";     genPointerGet (%s, %s) [ %d %s ]", aopName(AOP(result)), aopName(AOP(left)), litOffset, rematOffset ));
+  D (emitcode ("", ";     genPointerGet (%s)", aopName(AOP(result)), litOffset, rematOffset ));
   
   // shortcut for [aa],y (or [aa,x]) if already in zero-page
   // and we're not storing to the pointer itself
@@ -8864,7 +8868,7 @@ genPointerSet (iCode * ic, iCode * pi)
   aopOp (right, ic, FALSE);
   size = AOP_SIZE (right);
 
-  D (emitcode ("", ";     genPointerSet (%s, %s, %s)", aopName(AOP(result)), left?aopName(AOP(left)):"-", right?aopName(AOP(right)):"-" ));  
+  D (emitcode ("", ";     genPointerSet (%s)", aopName(AOP(result)), litOffset, rematOffset ));
 
   // shortcut for [aa],y (or [aa,x]) if already in zero-page
   // and we're not storing to the same pointer location
@@ -8956,7 +8960,9 @@ genPointerSet (iCode * ic, iCode * pi)
 
       for (offset=0; offset<size; offset++)
         {
+          storeRegTemp (m6502_reg_h, TRUE); // TODO: only needed if [baseptr],y used
           loadRegFromAop (m6502_reg_a, AOP (right), offset);
+          loadRegTemp (m6502_reg_h, TRUE); // TODO: only needed if [baseptr],y used
           storeRegIndexed (m6502_reg_a, litOffset + offset, rematOffset);
           m6502_freeReg (m6502_reg_a);
         }
