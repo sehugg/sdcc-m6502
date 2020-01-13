@@ -1942,9 +1942,7 @@ rmwWithAop (char *rmwop, asmop * aop, int loffset)
             rmwWithReg (rmwop, reg);
             if (strcmp ("tst", rmwop)) //TODO: no tst
               storeRegToAop (reg, aop, loffset);
-            if (needpull && !strcmp("cmp", rmwop)) emitcode("php",""); // TODO: this sucks
             pullOrFreeReg (reg, needpull);
-            if (needpull && !strcmp("cmp", rmwop)) emitcode("plp",""); // TODO: this sucks
             break;
           }
         /* If the offset is small enough, fall through to default case */
@@ -3014,11 +3012,13 @@ static bool isAddrSafe(operand* op, reg_info* reg) {
 }
 
 static int aopPreparePushedY = 0;
+static int aopPreparePreserveFlags = 0;
 
 // TODO: make sure this is called before/after aopAdrStr if indexing might be used
 static void
 aopAdrPrepare (asmop * aop, int loffset)
 {
+  aopPreparePreserveFlags = 0;
   if (loffset > (aop->size - 1))
     return;
 
@@ -3038,6 +3038,7 @@ aopAdrPrepare (asmop * aop, int loffset)
           DD( emitcode("", ";ofs=%d base=%d tsx=%d push=%d stk=%d", _G.stackOfs, _G.baseStackPushes, _G.tsxStackPushes, _G.stackPushes, aop->aopu.aop_stk) );
           loadRegFromConst(m6502_reg_y, _G.stackOfs - _G.baseStackPushes + aop->aopu.aop_stk + loffset + 1);
           m6502_reg_y->aop = &tsxaop;
+          aopPreparePreserveFlags = 1; // TODO: also need to make sure flags are needed by caller
         }
       }
     }
@@ -3056,7 +3057,10 @@ aopAdrUnprepare (asmop * aop, int loffset)
         return;
       } else {
         if (aopPreparePushedY) {
+          if (aopPreparePreserveFlags) emitcode("php", ""); // TODO: sucks
           loadRegTemp(m6502_reg_y, TRUE);
+          if (aopPreparePreserveFlags) emitcode("plp", ""); // TODO: sucks
+          if (aopPreparePreserveFlags) aopPreparePreserveFlags += 2;
           m6502_dirtyReg(m6502_reg_y, FALSE);
           aopPreparePushedY = 0;
         }
