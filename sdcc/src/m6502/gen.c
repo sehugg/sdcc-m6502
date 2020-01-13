@@ -4125,6 +4125,11 @@ genCall (iCode * ic)
   m6502_dirtyReg (m6502_reg_a, FALSE);
   m6502_dirtyReg (m6502_reg_hx, FALSE);
   
+  /* do we need to recompute the base ptr? */
+  if (_G.funcHasBasePtr) {
+    saveBasePtr();
+  }
+  
   /* if we need assign a result value */
   if ((IS_ITEMP (IC_RESULT (ic)) &&
        (OP_SYMBOL (IC_RESULT (ic))->nRegs || OP_SYMBOL (IC_RESULT (ic))->spildir)) || IS_TRUE_SYMOP (IC_RESULT (ic)))
@@ -4148,11 +4153,6 @@ genCall (iCode * ic)
   /* if we had saved some registers then unsave them */
   if (ic->regsSaved && !IFFUNC_CALLEESAVES (dtype))
     unsaveRegisters (ic);
-
-  /* do we need to recompute the base ptr? */
-  if (_G.funcHasBasePtr) {
-    saveBasePtr();
-  }
 }
 
 /*-----------------------------------------------------------------*/
@@ -4236,6 +4236,11 @@ genPcall (iCode * ic)
   m6502_dirtyReg (m6502_reg_a, FALSE);
   m6502_dirtyReg (m6502_reg_hx, FALSE);
 
+  /* do we need to recompute the base ptr? */
+  if (_G.funcHasBasePtr) {
+    saveBasePtr();
+  }
+
   /* if we need assign a result value */
   if ((IS_ITEMP (IC_RESULT (ic)) &&
        (OP_SYMBOL (IC_RESULT (ic))->nRegs || OP_SYMBOL (IC_RESULT (ic))->spildir)) || IS_TRUE_SYMOP (IC_RESULT (ic)))
@@ -4260,10 +4265,6 @@ genPcall (iCode * ic)
   if (ic->regsSaved && !IFFUNC_CALLEESAVES (dtype))
     unsaveRegisters (ic);
 
-  /* do we need to recompute the base ptr? */
-  if (_G.funcHasBasePtr) {
-    saveBasePtr();
-  }
 }
 
 /*-----------------------------------------------------------------*/
