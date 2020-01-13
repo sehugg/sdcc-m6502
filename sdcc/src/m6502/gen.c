@@ -7284,7 +7284,6 @@ genLeftShift (iCode * ic)
   symbol *tlbl, *tlbl1;
   char *shift;
   asmop *aopResult;
-  bool needpullcountreg;
   reg_info *countreg = NULL;
 
   D (emitcode (";     genLeftShift", ""));
@@ -7319,6 +7318,20 @@ genLeftShift (iCode * ic)
     aopResult = forceZeropageAop (AOP (result), sameRegs (AOP (left), AOP (result)));
 #endif
 
+  /* load the count register */
+  if (m6502_reg_y->isDead && !IS_AOP_WITH_Y (AOP (result)) && !IS_AOP_WITH_Y (AOP (left)))
+    countreg = m6502_reg_y;
+  else if (m6502_reg_x->isDead && !IS_AOP_WITH_X (AOP (result)) && !IS_AOP_WITH_X (AOP (left)))
+    countreg = m6502_reg_x;
+  else if (m6502_reg_a->isDead && !IS_AOP_WITH_A (AOP (result)) && !IS_AOP_WITH_A (AOP (left)))
+    countreg = m6502_reg_a;
+    
+  if(countreg)
+    {
+      countreg->isFree = FALSE;
+      loadRegFromAop (countreg, AOP (right), 0);
+    }
+
   /* now move the left to the result if they are not the
      same */
   if (IS_AOP_HX (AOP (result)))
@@ -7349,22 +7362,7 @@ genLeftShift (iCode * ic)
   offset = 0;
   tlbl1 = (regalloc_dry_run ? 0 : newiTempLabel (NULL));
 
-//TODO: use y?
-  if (m6502_reg_x->isDead && !IS_AOP_X (AOP (result)) && !IS_AOP_XA (AOP (result)) && !IS_AOP_AX (AOP (result)) && !IS_AOP_HX (AOP (result)))
-    countreg = m6502_reg_x;
-  else if (m6502_reg_a->isDead && !IS_AOP_A (AOP (result)) && !IS_AOP_XA (AOP (result)) && !IS_AOP_AX (AOP (result)))
-    countreg = m6502_reg_a;
-  else if (!IS_AOP_X (AOP (result)) && !IS_AOP_XA (AOP (result)) && !IS_AOP_AX (AOP (result)) && !IS_AOP_HX (AOP (result)))
-    countreg = m6502_reg_x;
-  else if(!IS_AOP_A (AOP (result)) && !IS_AOP_XA (AOP (result)) && !IS_AOP_AX (AOP (result)))
-    countreg = m6502_reg_a;
-  needpullcountreg = (countreg && pushRegIfSurv (countreg));
-  if(countreg)
-    {
-      countreg->isFree = FALSE;
-      loadRegFromAop (countreg, AOP (right), 0);
-    }
-  else
+  if (!countreg) // TODO
     {
       pushReg (m6502_reg_a, FALSE);
       pushReg (m6502_reg_a, TRUE);
@@ -7373,8 +7371,17 @@ genLeftShift (iCode * ic)
       regalloc_dry_run_cost += 3;
       pullReg (m6502_reg_a);
     }
-  emitcode (countreg == m6502_reg_a ? "cmp" : (countreg ? "cpx" : "tst13 1,s"), zero);
-  regalloc_dry_run_cost += (countreg ? 2 : 3);
+  else
+    {
+      // TODO: can combine these with load of count reg?
+      if (countreg == m6502_reg_a)
+        emitcode("cmp", zero);
+      if (countreg == m6502_reg_x)
+        emitcode("cpx", zero);
+      if (countreg == m6502_reg_y)
+        emitcode("cpy", zero);
+      regalloc_dry_run_cost += 2;
+    }
 
   emitBranch ("beq", tlbl1);
   if (!regalloc_dry_run)
@@ -7387,7 +7394,16 @@ genLeftShift (iCode * ic)
       shift = "rol";
     }
   if (!regalloc_dry_run)
-    emitcode (countreg == m6502_reg_a ? "dbnza" : (countreg ? "dbnzx" : "dbnz14 1,s"), "%05d$", labelKey2num (tlbl->key));
+    {
+      if (countreg == m6502_reg_a)
+        emitcode("dbnza", "%05d$", labelKey2num (tlbl->key));
+      if (countreg == m6502_reg_x)
+        emitcode("dbnzx", "%05d$", labelKey2num (tlbl->key));
+      if (countreg == m6502_reg_y)
+        emitcode("dbnzy", "%05d$", labelKey2num (tlbl->key));
+      if (!countreg)
+        emitcode ("dbnz17 1,s", "%05d$", labelKey2num (tlbl->key));
+    }
   regalloc_dry_run_cost += (countreg ? 3 : 5);
 
   if (!regalloc_dry_run)
@@ -7395,8 +7411,6 @@ genLeftShift (iCode * ic)
 
   if (!countreg)
     pullNull (1);
-  else
-    pullOrFreeReg (countreg, needpullcountreg);
 
   freeAsmop (result, NULL, ic, TRUE);
   freeAsmop (right, NULL, ic, TRUE);
@@ -7670,6 +7684,7 @@ genRightShiftLiteral (operand * left, operand * right, operand * result, iCode *
   freeAsmop (result, NULL, ic, TRUE);
 }
 
+// TODO: can refactor lots of left shift with right shift
 
 /*-----------------------------------------------------------------*/
 /* genRightShift - generate code for right shifting                */
@@ -7684,7 +7699,6 @@ genRightShift (iCode * ic)
   char *shift;
   bool sign;
   asmop *aopResult;
-  bool needpullcountreg;
   reg_info *countreg = NULL;
 
   D (emitcode (";     genRightShift", ""));
@@ -7731,10 +7745,27 @@ genRightShift (iCode * ic)
     aopResult = forceZeropageAop (AOP (result), sameRegs (AOP (left), AOP (result)));
 #endif
 
+  /* load the count register */
+  if (m6502_reg_y->isDead && !IS_AOP_WITH_Y (AOP (result)) && !IS_AOP_WITH_Y (AOP (left)))
+    countreg = m6502_reg_y;
+  else if (m6502_reg_x->isDead && !IS_AOP_WITH_X (AOP (result)) && !IS_AOP_WITH_X (AOP (left)))
+    countreg = m6502_reg_x;
+  else if (m6502_reg_a->isDead && !IS_AOP_WITH_A (AOP (result)) && !IS_AOP_WITH_A (AOP (left)))
+    countreg = m6502_reg_a;
+    
+  if(countreg)
+    {
+      countreg->isFree = FALSE;
+      loadRegFromAop (countreg, AOP (right), 0);
+    }
+
   /* now move the left to the result if they are not the
      same */
+  // TODO: can we keep it in A?
   if (IS_AOP_HX (AOP (result)))
-    loadRegFromAop (m6502_reg_hx, AOP (left), 0);
+    {
+      loadRegFromAop (m6502_reg_hx, AOP (left), 0);
+    }
   else if (IS_AOP_AX (AOP (result)) && IS_AOP_XA (AOP (left)) || IS_AOP_XA (AOP (result)) && IS_AOP_AX (AOP (left)))
     {
       // TODO: swap function
@@ -7761,21 +7792,7 @@ genRightShift (iCode * ic)
   offset = 0;
   tlbl1 = (regalloc_dry_run ? 0 : newiTempLabel (NULL));
 
-  if (m6502_reg_x->isDead && !IS_AOP_X (AOP (result)) && !IS_AOP_XA (AOP (result)) && !IS_AOP_AX (AOP (result)) && !IS_AOP_HX (AOP (result)))
-    countreg = m6502_reg_x;
-  else if (m6502_reg_a->isDead && !IS_AOP_A (AOP (result)) && !IS_AOP_XA (AOP (result)) && !IS_AOP_AX (AOP (result)))
-    countreg = m6502_reg_a;
-  else if (!IS_AOP_X (AOP (result)) && !IS_AOP_XA (AOP (result)) && !IS_AOP_AX (AOP (result)) && !IS_AOP_HX (AOP (result)))
-    countreg = m6502_reg_x;
-  else if(!IS_AOP_A (AOP (result)) && !IS_AOP_XA (AOP (result)) && !IS_AOP_AX (AOP (result)))
-    countreg = m6502_reg_a;
-  needpullcountreg = (countreg && pushRegIfSurv (countreg));
-  if(countreg)
-    {
-      countreg->isFree = FALSE;
-      loadRegFromAop (countreg, AOP (right), 0);
-    }
-  else
+  if (!countreg) // TODO
     {
       pushReg (m6502_reg_a, FALSE);
       pushReg (m6502_reg_a, TRUE);
@@ -7783,9 +7800,20 @@ genRightShift (iCode * ic)
       emitcode ("sta15", "2,s");
       regalloc_dry_run_cost += 3;
       pullReg (m6502_reg_a);
+      emitcode ("tst16 1,s", zero);
+      regalloc_dry_run_cost += 4;
     }
-  emitcode (countreg == m6502_reg_a ? "cmp" : (countreg ? "cpx" : "tst16 1,s"), zero);
-  regalloc_dry_run_cost += (countreg ? 2 : 3);
+  else
+    {
+      // TODO: combine with load index?
+      if (countreg == m6502_reg_a)
+        emitcode("cmp", zero);
+      if (countreg == m6502_reg_x)
+        emitcode("cpx", zero);
+      if (countreg == m6502_reg_y)
+        emitcode("cpy", zero);
+      regalloc_dry_run_cost += 2;
+    }
 
   emitBranch ("beq", tlbl1);
   if (!regalloc_dry_run)
@@ -7799,7 +7827,16 @@ genRightShift (iCode * ic)
     }
 
   if (!regalloc_dry_run)
-    emitcode (countreg == m6502_reg_a ? "dbnza" : (countreg ? "dbnzx" : "dbnz17 1,s"), "%05d$", labelKey2num (tlbl->key));
+    {
+      if (countreg == m6502_reg_a)
+        emitcode("dbnza", "%05d$", labelKey2num (tlbl->key));
+      if (countreg == m6502_reg_x)
+        emitcode("dbnzx", "%05d$", labelKey2num (tlbl->key));
+      if (countreg == m6502_reg_y)
+        emitcode("dbnzy", "%05d$", labelKey2num (tlbl->key));
+      if (!countreg)
+        emitcode ("dbnz17 1,s", "%05d$", labelKey2num (tlbl->key));
+    }
   regalloc_dry_run_cost += (countreg ? 3 : 5);
 
   if (!regalloc_dry_run)
@@ -7807,8 +7844,6 @@ genRightShift (iCode * ic)
 
   if (!countreg)
     pullNull (1);
-  else
-    pullOrFreeReg (countreg, needpullcountreg);
 
   freeAsmop (result, NULL, ic, TRUE);
   freeAsmop (right, NULL, ic, TRUE);
@@ -8248,6 +8283,7 @@ genDataPointerGet (operand * left, operand * right, operand * result, iCode * ic
   aopOp (result, ic, TRUE);
   size = AOP_SIZE (result);
 
+  // TODO: aopDerefAop(IMMD(_ftest_a_65536_8)), why?
   derefaop = aopDerefAop (AOP (left), litOffset);
   freeAsmop (left, NULL, ic, TRUE);
   derefaop->size = size;

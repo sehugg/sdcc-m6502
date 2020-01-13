@@ -49,6 +49,13 @@ replace {
 }
 
 replace {
+	dbnzy	%1
+} by {
+	dey
+	bne	%1
+}
+
+replace {
 	dbnza	%1
 } by {
 	sec

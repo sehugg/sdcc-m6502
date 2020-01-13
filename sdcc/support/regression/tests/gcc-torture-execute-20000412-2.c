@@ -9,7 +9,7 @@
 #endif
 
 #if !(defined (__SDCC_hc08) || defined (__SDCC_s08))
-int f(int a,int *y)
+int f(int a,int *y) __reentrant
 {
   int x = a;
 
