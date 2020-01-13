@@ -60,10 +60,9 @@ static char *TEMP1 = "(__TEMP+1)";
 static char *TEMP2 = "(__TEMP+2)";
 static char *TEMP3 = "(__TEMP+3)";
 
-// TODO: need to push/pop
 static char *BASEPTR = "(__BASEPTR)";
 
-const int STACK_TOP = 0x100; // TODO: use symbols
+const int STACK_TOP = 0x100;
 
 unsigned fReturnSizeM6502 = 4;   /* shared with ralloc.c */
 
@@ -88,7 +87,9 @@ extern struct dbuf_s *codeOutBuf;
 static bool operandsEqu (operand * op1, operand * op2);
 static void loadRegFromConst (reg_info * reg, int c);
 static asmop *newAsmop (short type);
+static void aopAdrPrepare (asmop * aop, int loffset);
 static const char *aopAdrStr (asmop * aop, int loffset, bool bit16);
+static void aopAdrUnprepare (asmop * aop, int loffset);
 static void updateiTempRegisterUse (operand * op);
 #define RESULTONSTACK(x) \
                          (IC_RESULT(x) && IC_RESULT(x)->aop && \
@@ -130,7 +131,6 @@ emitSignedBranch (bool gt, bool eq, symbol * tlbl)
   regalloc_dry_run_cost += eq ? 10 : 8;
   if (regalloc_dry_run)
     return;
-  // TODO: check this
   symbol *tlbl2 = newiTempLabel (NULL);
   symbol *tlbl3 = newiTempLabel (NULL);
   if (eq && !gt)
@@ -151,7 +151,6 @@ emitUnsignedBranch (bool gt, bool eq, symbol * tlbl)
   regalloc_dry_run_cost += (eq^gt) ? 4 : 2;
   if (regalloc_dry_run)
     return;
-  // TODO: check this
   symbol *tlbl2 = newiTempLabel (NULL);
   if (eq && !gt)
     emitcode ("beq", "%05d$", labelKey2num (tlbl->key));
@@ -160,9 +159,6 @@ emitUnsignedBranch (bool gt, bool eq, symbol * tlbl)
   emitcode (gt ? "bcs" : "bcc", "%05d$", labelKey2num (tlbl->key));
   emitLabel (tlbl2);
 }
-
-// TODO: fix
-//#define emitSignedBranch emitUnsignedBranch
 
 static void
 emitBranch (char *branchop, symbol * tlbl)
@@ -487,7 +483,6 @@ pushReg (reg_info * reg, bool freereg)
       _G.stackPushes++;
       updateCFA ();
       break;
-    // TODO: use X/Y as temp instead of push?
     case X_IDX:
       if (IS_M65C02) {
         emitcode ("phx", "");
@@ -527,7 +522,8 @@ pushReg (reg_info * reg, bool freereg)
       pushReg(m6502_reg_a, freereg);
       break;
     default:
-      break; // TODO?
+      wassertl(0, "pushReg() error");
+      break;
     }
   if (freereg)
     m6502_freeReg (reg);
@@ -872,9 +868,11 @@ forceload:
         }
       else
         {
+          aopAdrPrepare(aop, loffset);
           const char *l = aopAdrStr (aop, loffset, FALSE);
           emitcode (regidx == A_IDX ? "lda" : regidx == X_IDX ? "ldx" : "ldy", "%s", l);
           regalloc_dry_run_cost += ((aop->type == AOP_DIR || aop->type == AOP_IMMD) ? 2 : 3);
+          aopAdrUnprepare(aop, loffset);
           m6502_dirtyReg (reg, FALSE);
         }
       break;
@@ -1077,7 +1075,9 @@ storeRegToAop (reg_info *reg, asmop * aop, int loffset)
       else
         {
           // TODO: i think this does not assemble?
+          aopAdrPrepare(aop, loffset);
           emitcode ("sta", "%s", aopAdrStr (aop, loffset, FALSE));
+          aopAdrUnprepare(aop, loffset);
           regalloc_dry_run_cost += ((aop->type == AOP_DIR || aop->type == AOP_IMMD) ? 2 :3);
         }
       break;
@@ -1095,7 +1095,9 @@ storeRegToAop (reg_info *reg, asmop * aop, int loffset)
         }
       else
         {
+          aopAdrPrepare(aop, loffset);
           emitcode (regidx==X_IDX?"stx":"sty", "%s", aopAdrStr (aop, loffset, FALSE));
+          aopAdrUnprepare(aop, loffset);
           regalloc_dry_run_cost += ((aop->type == AOP_DIR || aop->type == AOP_IMMD) ? 2 :3);
         }
       break;
@@ -1112,8 +1114,10 @@ storeRegToAop (reg_info *reg, asmop * aop, int loffset)
         }
       if (aop->type == AOP_DIR || aop->type == AOP_EXT)
         {
+          aopAdrPrepare(aop, loffset);
           emitcode ("stx", "%s", aopAdrStr (aop, loffset, TRUE));
           emitcode ("sty", "%s", aopAdrStr (aop, loffset+1, TRUE));
+          aopAdrUnprepare(aop, loffset);
           regalloc_dry_run_cost += (aop->type == AOP_DIR ? 4 : 6);;
         }
       else if (IS_AOP_XA (aop))
@@ -1411,7 +1415,9 @@ storeConstToAop (int c, asmop * aop, int loffset)
       // TODO: same for 6502?
       if (!c && IS_M65C02 && !(aop->op && isOperandVolatile (aop->op, FALSE)))
         {
+          aopAdrPrepare(aop, loffset);
           emitcode ("stz", "%s", aopAdrStr (aop, loffset, FALSE));
+          aopAdrUnprepare(aop, loffset);
           regalloc_dry_run_cost += aop->type == AOP_DIR ? 2 : 3;
           break;
         }
@@ -1464,7 +1470,9 @@ storeImmToAop (char *c, asmop * aop, int loffset)
       /* destination is volatile to avoid the read side-effect. */
       if (!strcmp (c, zero) && IS_M65C02 && !(aop->op && isOperandVolatile (aop->op, FALSE)))
         {
+          aopAdrPrepare(aop, loffset);
           emitcode ("stz", "%s", aopAdrStr (aop, loffset, FALSE));
+          aopAdrUnprepare(aop, loffset);
           regalloc_dry_run_cost += 2;
           break;
         }
@@ -1770,7 +1778,9 @@ accopWithAop (char *accop, asmop *aop, int loffset)
     }
   else
     {
+      aopAdrPrepare(aop, loffset);
       emitcode (accop, "%s", aopAdrStr (aop, loffset, FALSE));
+      aopAdrUnprepare(aop, loffset);
       if (aop->type == AOP_DIR || aop->type == AOP_LIT)
         regalloc_dry_run_cost += 2;
       else
@@ -1890,6 +1900,7 @@ rmwWithAop (char *rmwop, asmop * aop, int loffset)
       break;
     case AOP_DIR:
     case AOP_EXT:
+      aopAdrPrepare(aop, loffset);
       // TODO: this sucks
       if (!strcmp("asr", rmwop)) {
         emitcode ("pha", "");
@@ -1900,6 +1911,7 @@ rmwWithAop (char *rmwop, asmop * aop, int loffset)
         regalloc_dry_run_cost += 7;
       }
       emitcode (rmwop, aopAdrStr(aop, loffset, FALSE));
+      aopAdrUnprepare(aop, loffset);
       regalloc_dry_run_cost += ((aop->type == AOP_DIR || aop->type == AOP_IMMD) ? 2 : 3);
       break;
     case AOP_DUMMY:
@@ -1927,7 +1939,7 @@ rmwWithAop (char *rmwop, asmop * aop, int loffset)
       }
     default:
       // TODO: [aa],y dosn't work with inc/dec
-      emitcode (rmwop, "%s;%d", aopAdrStr (aop, loffset, FALSE), aop->type);
+      emitcode (rmwop, "%s ;type %d", aopAdrStr (aop, loffset, FALSE), aop->type);
       regalloc_dry_run_cost += ((aop->type == AOP_DIR || aop->type == AOP_IMMD) ? 2 : 3);
     }
 
@@ -2132,7 +2144,7 @@ static asmop *
 newAsmop (short type)
 {
   asmop *aop;
-
+// TODO: are these ever freed?
   aop = Safe_calloc (1, sizeof (asmop));
   aop->type = type;
   aop->op = NULL;
@@ -2980,13 +2992,61 @@ static bool isAddrSafe(operand* op, reg_info* reg) {
     case AOP_EXT:	// aaaa
       return true;
     case AOP_SOF:       // (BASEPTR),y
-      if (reg == m6502_reg_a && m6502_reg_y->isFree)	
+      if (reg == m6502_reg_a && (m6502_reg_x->isFree || m6502_reg_y->isFree))
         return true;
   }
   
   return false;
 }
 
+static int aopPreparePushedY = 0;
+
+// TODO: make sure this is called before/after aopAdrStr if indexing might be used
+static void
+aopAdrPrepare (asmop * aop, int loffset)
+{
+  if (loffset > (aop->size - 1))
+    return;
+
+  switch (aop->type)
+    {
+    case AOP_SOF:
+      if (regalloc_dry_run) {
+        regalloc_dry_run_cost += 4; // TODO? more?
+      } else {
+        // can we get stack pointer?
+        if (m6502_reg_x->isFree) {
+          doTSX();
+        // try another way [BASEPTR],y
+        } else {
+          aopPreparePushedY = storeRegTemp(m6502_reg_y, FALSE);
+          loadRegFromConst(m6502_reg_y, _G.stackOfs + aop->aopu.aop_stk + loffset + 1);
+          m6502_reg_y->aop = &tsxaop;
+        }
+      }
+    }
+}
+
+static void
+aopAdrUnprepare (asmop * aop, int loffset)
+{
+  if (loffset > (aop->size - 1))
+    return;
+
+  switch (aop->type)
+    {
+    case AOP_SOF:
+      if (regalloc_dry_run) {
+        return;
+      } else {
+        if (aopPreparePushedY) {
+          loadRegTemp(m6502_reg_y, TRUE);
+          m6502_dirtyReg(m6502_reg_y, FALSE);
+          aopPreparePushedY = 0;
+        }
+      }
+    }
+}
 
 /*-----------------------------------------------------------------*/
 /* aopAdrStr - for referencing the address of the aop              */
@@ -3061,11 +3121,7 @@ aopAdrStr (asmop * aop, int loffset, bool bit16)
         return "1,x"; // fake result, not needed
       } else {
         bool needpullx = FALSE;
-        // can we get stack pointer?
-        if (m6502_reg_x->isFree) {
-          doTSX();
-        }
-        // did we get it?
+        // did we get stack pointer in X?
         if (m6502_reg_x->aop == &tsxaop) {
           // hc08's tsx returns +1, ours returns +0
           xofs = STACK_TOP + _G.stackOfs + _G.tsxStackPushes + aop->aopu.aop_stk + offset + 1;
@@ -3073,23 +3129,23 @@ aopAdrStr (asmop * aop, int loffset, bool bit16)
           rs = Safe_calloc (1, strlen (s) + 1);
           strcpy (rs, s);
           return rs;
-        // try another way (TODO)
-        } else if (m6502_reg_y->isDead) {
-          loadRegFromConst(m6502_reg_y, _G.stackOfs + aop->aopu.aop_stk + offset + 1);
-          return "[__BASEPTR],y"; // TODO: is base ptr loaded?
+        // did we get base ptr in Y?
+        } else if (m6502_reg_y->aop == &tsxaop) {
+          return "[__BASEPTR],y";
         } else {
-          return "[__BASEPTR],y"; // TODO: is base ptr or Y loaded?
+          regalloc_dry_run_cost += 999;
+          return "ERROR [__BASEPTR],y"; // TODO: is base ptr or Y loaded?
         }
       }
     case AOP_IDX:
       xofs = offset; /* For now, assume hx points to the base address of operand */
       // TODO: slow
       storeRegTemp(m6502_reg_hx, TRUE);
-      if (m6502_reg_y->isDead) {
+      if (m6502_reg_y->aop == &tsxaop) {
         loadRegFromConst(m6502_reg_y, offset);
         return "[__TEMP],y"; // TODO: what if != 0 tempOfs?
       } else
-        return "ERROR,x"; // TODO: error
+        return "ERROR"; // TODO: error
     }
 
   werror (E_INTERNAL_ERROR, __FILE__, __LINE__, "aopAdrStr got unsupported aop->type");
