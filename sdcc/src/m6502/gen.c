@@ -1024,6 +1024,17 @@ static reg_info* getFreeByteReg() {
   else
     return NULL;
 }
+// TODO: move more to this one?
+static reg_info* getDeadByteReg() {
+  if (m6502_reg_a->isDead)
+    return m6502_reg_a;
+  else if (m6502_reg_x->isDead)
+    return m6502_reg_x;
+  else if (m6502_reg_y->isDead)
+    return m6502_reg_y;
+  else
+    return NULL;
+}
 
 /*--------------------------------------------------------------------------*/
 /* storeRegToAop - Store register reg to logical offset loffset of aop.     */
@@ -3188,16 +3199,33 @@ asmopToBool (asmop *aop, bool resultInA)
     {
       // result -> A
       if (resultInA)
-        loadRegFromAop (m6502_reg_a, aop, 0);
-      // result -> flag
-      //else if (aop->type == AOP_DIR || aop->type == AOP_EXT)
-      //  rmwWithAop ("bit", aop, 0);
-      else {
-        // ldx or ldy?
-        reg_info* freereg = getFreeByteReg();
+        {
+          loadRegFromAop (m6502_reg_a, aop, 0);
+        }
+      // result -> flags
+      else if (IS_AOP_A(aop))
+        {
+          emitcode ("ora", zero);
+          regalloc_dry_run_cost += 2;
+        }
+      else if (IS_AOP_X(aop))
+        {
+          emitcode ("cpx", zero);
+          regalloc_dry_run_cost += 2;
+        }
+      else if (IS_AOP_Y(aop))
+        {
+          emitcode ("cpy", zero);
+          regalloc_dry_run_cost += 2;
+        }
+      else  // TODO: more cases? use transfer reg?
+      {
+        // ldx or ldy? or lda?
+        reg_info* freereg = getDeadByteReg();
         if (freereg) {
           loadRegFromAop (freereg, aop, 0);
         } else {
+          // no choice, all regs are full
           storeRegTemp (m6502_reg_a, TRUE);
           loadRegFromAop (m6502_reg_a, aop, 0);
           loadRegTempNoFlags (m6502_reg_a, TRUE); // TODO?
@@ -3272,7 +3300,7 @@ asmopToBool (asmop *aop, bool resultInA)
       if (resultInA)
         needpula = FALSE;
       else
-        needpula = storeRegTemp (m6502_reg_a, TRUE);
+        needpula = storeRegTempIfSurv (m6502_reg_a);
       loadRegFromAop (m6502_reg_a, aop, offset--);
       if (isFloat)
         {
@@ -3344,7 +3372,7 @@ asmopToBool (asmop *aop, bool resultInA)
         }
       else
         {
-          needpula = storeRegTemp (m6502_reg_a, TRUE); // TODO: ifSurv? resultInA?
+          needpula = storeRegTempIfSurv (m6502_reg_a);
           loadRegFromAop (m6502_reg_a, aop, offset--);
           if (isFloat)
             {
@@ -4814,6 +4842,7 @@ genMinusDec (iCode * ic)
     
   icount = (unsigned int) ulFromVal (AOP (IC_RIGHT (ic))->aopu.aop_lit);
   // TODO: we should be able to dex/dey
+  // TODO: genPlusIncr has a lot more, can merge?
 
   if ((icount > 1) || (icount < 0))
     return FALSE;
