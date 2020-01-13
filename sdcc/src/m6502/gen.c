@@ -4,8 +4,10 @@
   Copyright (C) 1998, Sandeep Dutta . sandeep.dutta@usa.net
   Copyright (C) 1999, Jean-Louis VERN.jlvern@writeme.com
   Bug Fixes - Wojciech Stryjewski  wstryj1@tiger.lsu.edu (1999 v2.1.9a)
-  Hacked for the MOS6502:
+  Hacked for the HC08:
   Copyright (C) 2003, Erik Petrich
+  Hacked for the MOS6502:
+  Copyright (C) 2020, Steven Hugg  hugg@fasterlight.com
 
   This program is free software; you can redistribute it and/or modify it
   under the terms of the GNU General Public License as published by the
@@ -8419,7 +8421,7 @@ genPointerGet (iCode * ic, iCode * pi, iCode * ifx)
   
   // shortcut for [aa],y (or [aa,x]) if already in zero-page
   // and we're not storing to the pointer itself
-  if (AOP_TYPE (left) == AOP_DIR && size <= 2 && !rematOffset && litOffset >= 0 && litOffset <= 256-size
+  if (AOP_TYPE (left) == AOP_DIR && !rematOffset && litOffset >= 0 && litOffset <= 256-size
       && !sameRegs(AOP(left), AOP(result)) ) {
   
     needpulla = pushRegIfSurv (m6502_reg_a);
@@ -9013,7 +9015,7 @@ genPointerSet (iCode * ic, iCode * pi)
 
   // shortcut for [aa],y (or [aa,x]) if already in zero-page
   // and we're not storing to the same pointer location
-  if (AOP_TYPE (result) == AOP_DIR && size <= 2 && !rematOffset && litOffset >= 0 && litOffset <= 256-size
+  if (AOP_TYPE (result) == AOP_DIR && !rematOffset && litOffset >= 0 && litOffset <= 256-size
       && !sameRegs(AOP(right), AOP(result)) ) {
   
     needpulla = pushRegIfSurv (m6502_reg_a);

@@ -1,7 +1,7 @@
 /*-------------------------------------------------------------------------
    setjmp.c - source file for ANSI routines setjmp & longjmp
 
-   Copyright (C) 2016, Maarten Brock. sourceforge.brock AT dse.nl
+   Copyright (C) 2020, Steven Hugg. hugg@efasterlight.com
 
    This library is free software; you can redistribute it and/or modify it
    under the terms of the GNU General Public License as published by the
