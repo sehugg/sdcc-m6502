@@ -70,6 +70,7 @@ static struct
   int stackPushes;
   set *sendSet;
   int tsxStackPushes;
+  int baseStackPushes;
   int tempOfs;
 }
 _G;
@@ -2302,9 +2303,10 @@ static void doTSX() {
 static void saveBasePtr() {
   storeRegTemp (m6502_reg_x, TRUE); // TODO: only when used?
   // TODO: if X is free should we call doTSX() to mark X=S?
-  //doTSX();
-  emitcode ("tsx", "");
+  doTSX();
+  //emitcode ("tsx", "");
   emitcode ("stx", BASEPTR);
+  _G.baseStackPushes = _G.stackPushes;
   regalloc_dry_run_cost += 2;
   loadRegTemp (m6502_reg_x, TRUE);
 }
@@ -3028,7 +3030,9 @@ aopAdrPrepare (asmop * aop, int loffset)
         // try another way [BASEPTR],y
         } else {
           aopPreparePushedY = storeRegTemp(m6502_reg_y, FALSE);
-          loadRegFromConst(m6502_reg_y, _G.stackOfs + aop->aopu.aop_stk + loffset + 1);
+          // TODO: wtf?
+          DD( emitcode("", ";ofs=%d base=%d tsx=%d push=%d stk=%d", _G.stackOfs, _G.baseStackPushes, _G.tsxStackPushes, _G.stackPushes, aop->aopu.aop_stk) );
+          loadRegFromConst(m6502_reg_y, _G.stackOfs - _G.baseStackPushes + aop->aopu.aop_stk + loffset + 1);
           m6502_reg_y->aop = &tsxaop;
         }
       }
@@ -3493,12 +3497,9 @@ genCopy (operand * result, operand * source)
   /* general case */
   // TODO: sucks for copying registers
   DD (emitcode (";     genCopy (general case)", ""));
-  bool needpula = pushRegIfUsed (m6502_reg_a);
   for (offset=0; offset<size; offset++) {
-    loadRegFromAop (m6502_reg_a, AOP (source), offset);
-    storeRegToAop (m6502_reg_a, AOP (result), offset);
+    transferAopAop( AOP(source), offset, AOP(result), offset);
   }
-  if (needpula) pullReg (m6502_reg_a);
 }
 
 /*-----------------------------------------------------------------*/
