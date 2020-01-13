@@ -3763,6 +3763,7 @@ saveRegisters (iCode *lic)
   // make sure not to clobber A
   // TODO: why does isUsed not set?
   // TODO: only clobbered if m6502_reg_a->isFree
+  // TODO: 65C02
   bool clobbers_a = !IS_M65C02 
     && (bitVectBitValue(ic->rSurv, X_IDX) || bitVectBitValue(ic->rSurv, Y_IDX))
     && !bitVectBitValue(ic->rSurv, A_IDX);
@@ -3787,12 +3788,20 @@ unsaveRegisters (iCode *ic)
 
   DD (emitcode ("", "; unsaveRegisters"));
 
+  // TODO: only clobbered if m6502_reg_a->isFree
+  // TODO: 65C02
+  bool clobbers_a = !IS_M65C02 
+    && (bitVectBitValue(ic->rSurv, X_IDX) || bitVectBitValue(ic->rSurv, Y_IDX))
+    && !bitVectBitValue(ic->rSurv, A_IDX);
+  if (clobbers_a)
+    storeRegTemp (m6502_reg_a, TRUE);
   for (i = H_IDX; i >= A_IDX; i--)
     {
       if (bitVectBitValue (ic->rSurv, i))
         pullReg (m6502_regWithIdx (i));
     }
-
+  if (clobbers_a)
+    loadRegTemp (m6502_reg_a, TRUE);
 }
 
 /*-----------------------------------------------------------------*/
