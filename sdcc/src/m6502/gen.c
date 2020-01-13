@@ -51,16 +51,12 @@ static char *zero = "#0x00";
 static char *one = "#0x01";
 
 #define NUM_TEMP_REGS 4
-static char *TEMPFMT = "(__TEMP+%d)";
+static char *TEMPFMT = "*(__TEMP+%d)";
 static char *TEMPFMT_IND = "[__TEMP+%d]";
-static char *TEMPFMT_IY = "[(__TEMP+%d)],y";
-static char *TEMPFMT_IX = "[(__TEMP+%d),x]";
-static char *TEMP0 = "(__TEMP+0)";
-static char *TEMP1 = "(__TEMP+1)";
-static char *TEMP2 = "(__TEMP+2)";
-static char *TEMP3 = "(__TEMP+3)";
+static char *TEMPFMT_IY = "[__TEMP+%d],y";
+//static char *TEMPFMT_IX = "[(__TEMP+%d),x]";
 
-static char *BASEPTR = "(__BASEPTR)";
+static char *BASEPTR = "*(__BASEPTR)";
 
 const int STACK_TOP = 0x100;
 
@@ -1741,7 +1737,7 @@ accopWithMisc (char *accop, char *param)
 {
   emitcode (accop, "%s", param);
   // TODO: ,x?
-  regalloc_dry_run_cost += ((!param[0] || !strcmp(param, ",x")) ? 1 : ((param[0]=='#' || param[0]=='*') ? 2 : 3));
+  regalloc_dry_run_cost += ((!param[0] || !strcmp(param, "a")) ? 1 : ((param[0]=='#' || param[0]=='*') ? 2 : 3));
   if (strcmp (accop, "bit") && strcmp (accop, "cmp") && strcmp (accop, "cpx") && strcmp (accop, "cpy"))
     m6502_dirtyReg (m6502_reg_a, FALSE);
 }
@@ -2000,14 +1996,14 @@ loadRegIndexed (reg_info * reg, int offset, char * rematOfs)
           emitcode ("txa", "");
           emitcode ("clc", "");
           emitcode ("adc", "#<(%s+%d)", rematOfs, offset);
-          emitcode ("sta", "%s", TEMP0);
+          emitcode ("sta", TEMPFMT, _G.tempOfs+0);
           emitcode ("tya", "");
           emitcode ("adc", "#>(%s+%d)", rematOfs, offset);
-          emitcode ("sta", "%s", TEMP1);
-          emitcode ("sty", "%s", TEMP2);
+          emitcode ("sta", TEMPFMT, _G.tempOfs+1);
+          emitcode ("sty", TEMPFMT, _G.tempOfs+2);
           emitcode ("ldy", "#0x00");
-          emitcode ("lda", "[%s],y", TEMP0);
-          emitcode ("ldy", "%s", TEMP2); // TODO: if free only
+          emitcode ("lda", TEMPFMT_IY, _G.tempOfs+0);
+          emitcode ("ldy", TEMPFMT, _G.tempOfs+2); // TODO: if free only
           regalloc_dry_run_cost += 14+4;
         }
       m6502_dirtyReg (reg, FALSE);
@@ -2366,6 +2362,7 @@ aopForSym (iCode * ic, symbol * sym, bool result)
               if (operandConflictsWithX (IC_RIGHT (ic)))
                 return aop;
             }
+          // TODO?
           /* It's safe to use tsx here. */
           if (!tsxUseful (ic))
             return aop;
@@ -8349,7 +8346,7 @@ genPointerGet (iCode * ic, iCode * pi, iCode * ifx)
 
   decodePointerOffset (right, &litOffset, &rematOffset);
 
-  D (emitcode ("", ";     genPointerGet (%s)", aopName(AOP(result)), litOffset, rematOffset ));
+  D (emitcode ("", ";     genPointerGet (%s)", aopName(AOP(left)), litOffset, rematOffset ));
   
   // shortcut for [aa],y (or [aa,x]) if already in zero-page
   // and we're not storing to the pointer itself
@@ -8944,7 +8941,7 @@ genPointerSet (iCode * ic, iCode * pi)
   aopOp (right, ic, FALSE);
   size = AOP_SIZE (right);
 
-  D (emitcode ("", ";     genPointerSet (%s)", aopName(AOP(result)), litOffset, rematOffset ));
+  D (emitcode ("", ";     genPointerSet (%s)", aopName(AOP(right)), litOffset, rematOffset ));
 
   // shortcut for [aa],y (or [aa,x]) if already in zero-page
   // and we're not storing to the same pointer location
