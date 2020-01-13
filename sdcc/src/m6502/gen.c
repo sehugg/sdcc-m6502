@@ -8387,6 +8387,7 @@ genPointerGet (iCode * ic, iCode * pi, iCode * ifx)
   
   // TODO: don't use HX anymore, use ZP
   
+  needpulla = pushRegIfSurv (m6502_reg_a);
   if (!IS_AOP_HX (AOP (left)))
     {
       needpullx = pushRegIfSurv (m6502_reg_x);
@@ -8413,7 +8414,6 @@ genPointerGet (iCode * ic, iCode * pi, iCode * ifx)
             }
           else
             {
-              needpulla = pushRegIfSurv (m6502_reg_a);
               loadRegIndexed (m6502_reg_a, litOffset, rematOffset);
               m6502_useReg (m6502_reg_a);
               emitcode ("aix", "#%d", size);
@@ -8463,7 +8463,6 @@ genPointerGet (iCode * ic, iCode * pi, iCode * ifx)
     }
   else
     {
-      needpulla = pushRegIfSurv (m6502_reg_a);
       for (offset=0; offset<size; offset++)
         {
           loadRegIndexed (m6502_reg_a, litOffset + offset, rematOffset);
@@ -8496,9 +8495,9 @@ release:
     }
 
 //  emitcode("php", "");//TODO
-  pullOrFreeReg (m6502_reg_a, needpulla);
   pullOrFreeReg (m6502_reg_h, needpullh);
   pullOrFreeReg (m6502_reg_x, needpullx);
+  pullOrFreeReg (m6502_reg_a, needpulla);
 //  emitcode("plp", "");
   regalloc_dry_run_cost += 2;
 
@@ -8967,6 +8966,7 @@ genPointerSet (iCode * ic, iCode * pi)
     goto release;
   }
 
+  needpulla = pushRegIfSurv (m6502_reg_a);
   needpullx = pushRegIfSurv (m6502_reg_x);
   needpullh = pushRegIfSurv (m6502_reg_h);
 
@@ -8979,8 +8979,6 @@ genPointerSet (iCode * ic, iCode * pi)
     {
       if (size == 1)
         {
-          if (!IS_AOP_A (AOP (right)))
-            needpulla = pushRegIfSurv (m6502_reg_a);
           loadRegHXAfromAop(AOP (result), 1, AOP (result), 0, AOP (right), 0 );
           storeRegIndexed (m6502_reg_a, litOffset, rematOffset);
         }
@@ -8988,8 +8986,6 @@ genPointerSet (iCode * ic, iCode * pi)
         {
           if (vol)
             {
-              if (AOP (right)->aopu.aop_reg[0]->rIdx != A_IDX)
-                needpulla = pushRegIfSurv (m6502_reg_a);
               pushReg (AOP (right)->aopu.aop_reg[0], TRUE);
               pushReg (AOP (right)->aopu.aop_reg[1], TRUE);
               loadRegFromAop (m6502_reg_hx, AOP (result), 0);
@@ -9000,7 +8996,6 @@ genPointerSet (iCode * ic, iCode * pi)
             }
           else
             {
-              needpulla = pushRegIfSurv (m6502_reg_a);
               loadRegFromAop (m6502_reg_a, AOP (right), 0);
               pushReg (AOP (right)->aopu.aop_reg[1], TRUE);
               loadRegFromAop (m6502_reg_hx, AOP (result), 0);
@@ -9012,7 +9007,6 @@ genPointerSet (iCode * ic, iCode * pi)
         }
       else if (IS_AOP_AX (AOP (right)))
         {
-          needpulla = pushRegIfSurv (m6502_reg_a);
           pushReg (m6502_reg_x, TRUE);
           loadRegFromAop (m6502_reg_hx, AOP (result), 0);
           storeRegIndexed (m6502_reg_a, litOffset+1, rematOffset);
@@ -9028,7 +9022,6 @@ genPointerSet (iCode * ic, iCode * pi)
   else
     {
       decodePointerOffset (left, &litOffset, &rematOffset);
-      needpulla = pushRegIfSurv (m6502_reg_a);
       loadRegFromAop (m6502_reg_hx, AOP (result), 0);
 
       for (offset=0; offset<size; offset++)
@@ -9056,9 +9049,9 @@ release:
       pi->generated = 1;
     }
 
-  pullOrFreeReg (m6502_reg_a, needpulla);
   pullOrFreeReg (m6502_reg_h, needpullh);
   pullOrFreeReg (m6502_reg_x, needpullx);
+  pullOrFreeReg (m6502_reg_a, needpulla);
 }
 
 // TODO: genIfx sometimes does a cmp #0 but has flags already, peephole might fix
