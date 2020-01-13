@@ -9372,16 +9372,23 @@ genJumpTab (iCode * ic)
     {
       bool needpulla = pushRegIfSurv (m6502_reg_a);
       // use X or Y for index?
-      bool isx = m6502_reg_x->isFree;
-      reg_info* regidx = isx ? m6502_reg_x : m6502_reg_y;
-      bool needpullreg = pushRegIfSurv (regidx);
-      /* get the condition into regidx */
-      loadRegFromAop (regidx, AOP (IC_JTCOND (ic)), 0);
+      bool needpullind = false;
+      reg_info* indreg;
+      if (IS_AOP_X (AOP (IC_JTCOND (ic)))) {
+        indreg = m6502_reg_x;
+      } else if (IS_AOP_Y (AOP (IC_JTCOND (ic)))) {
+        indreg = m6502_reg_y;
+      } else {
+        indreg = m6502_reg_x->isFree ? m6502_reg_x : m6502_reg_y;
+        needpullind = pushRegIfSurv (indreg);
+        /* get the condition into indreg */
+        loadRegFromAop (indreg, AOP (IC_JTCOND (ic)), 0);
+      }
       freeAsmop (IC_JTCOND (ic), NULL, ic, TRUE);
 
       if (!regalloc_dry_run)
         {
-          if (isx) {
+          if (indreg == m6502_reg_x) {
             emitcode ("lda", "%05d$,x", labelKey2num (jtablo->key));
             storeRegTemp (m6502_reg_a, TRUE);
             emitcode ("lda", "%05d$,x", labelKey2num (jtabhi->key));
@@ -9396,7 +9403,7 @@ genJumpTab (iCode * ic)
       regalloc_dry_run_cost += 6;
       loadRegTemp(NULL, TRUE);
       loadRegTemp(NULL, TRUE);
-      if (needpullreg) pullReg(regidx);
+      if (needpullind) pullReg(indreg);
       if (needpulla) pullReg(m6502_reg_a);
       emitcode ("jmp", TEMPFMT_IND, _G.tempOfs);
       regalloc_dry_run_cost += 3;
