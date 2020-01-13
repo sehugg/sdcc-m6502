@@ -62,7 +62,7 @@ long long _rrslonglong(long long l, char s)
 long long _rrslonglong(long long l, char s)
 {
 	int32_t *top = (uint32_t *)((char *)(&l) + 4);
-	uint16_t *middle = (uint16_t *)((char *)(&l) + 3);
+	uint32_t *middle = (uint32_t *)((char *)(&l) + 2);
 	uint32_t *bottom = (uint32_t *)(&l);
 	uint16_t *b = (uint16_t *)(&l);
 
@@ -75,8 +75,8 @@ long long _rrslonglong(long long l, char s)
 	}
 
 	(*bottom) >>= s;
-	(*bottom) |= ((uint32_t)((*middle) >> s) << 16);
-	(*top) |= (((*middle) & 0xffff0000) >> s);
+	(*middle) |= (((*middle & 0xffff0000ul) >> s) & 0x0000fffful);
+	(*top) >>= s;
 
 	return(l);
 }
