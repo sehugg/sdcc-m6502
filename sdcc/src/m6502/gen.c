@@ -1938,9 +1938,11 @@ rmwWithAop (char *rmwop, asmop * aop, int loffset)
             needpull = pushRegIfUsed (reg);
             loadRegFromAop (reg, aop, loffset);
             rmwWithReg (rmwop, reg);
-            if (strcmp ("tst", rmwop))
+            if (strcmp ("tst", rmwop)) //TODO: no tst
               storeRegToAop (reg, aop, loffset);
+            if (needpull && !strcmp("cmp", rmwop)) emitcode("php",""); // TODO: this sucks
             pullOrFreeReg (reg, needpull);
+            if (needpull && !strcmp("cmp", rmwop)) emitcode("plp",""); // TODO: this sucks
             break;
           }
         /* If the offset is small enough, fall through to default case */

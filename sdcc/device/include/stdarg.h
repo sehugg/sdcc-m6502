@@ -30,6 +30,7 @@
 #ifndef __SDC51_STDARG_H
 #define __SDC51_STDARG_H 1
 
+// TODO: 6502 could use 1-byte stack pointer
 #if defined(__SDCC_z80) || defined(__SDCC_z180) || defined(__SDCC_r2k) || defined(__SDCC_r3ka) || defined(__SDCC_tlcs90) || defined (__SDCC_ez80_z80) || defined(__SDCC_gbz80) || defined(__SDCC_hc08) || defined(__SDCC_s08) || defined(__SDCC_stm8) || defined(__SDCC_m6502) || defined(__SDCC_m65c02)
 
 typedef unsigned char * va_list;
