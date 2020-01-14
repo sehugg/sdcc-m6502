@@ -1221,11 +1221,14 @@ loadRegFromConst (reg_info * reg, int c)
           if (reg->litConst == c)
             break;
         }
+        /*
+        TODO: does not work for X <-> Y, can kill regs
       if (m6502_reg_y->isLitConst && m6502_reg_y->litConst == c)
         transferRegReg (m6502_reg_y, reg, FALSE);
       else if (m6502_reg_x->isLitConst && m6502_reg_x->litConst == c)
         transferRegReg (m6502_reg_x, reg, FALSE);
       else
+      */
         {
           emitcode ("lda", "!immedbyte", c);
           regalloc_dry_run_cost += 2;
@@ -1253,8 +1256,11 @@ loadRegFromConst (reg_info * reg, int c)
 
       if (m6502_reg_a->isLitConst && m6502_reg_a->litConst == c)
         transferRegReg (m6502_reg_a, reg, FALSE);
+        /*
+        TODO does not work for X<->Y
       else if (m6502_reg_y->isLitConst && m6502_reg_y->litConst == c)
         transferRegReg (m6502_reg_y, reg, FALSE);
+        */
       else
         {
           emitcode ("ldx", "!immedbyte", c);
@@ -1400,18 +1406,28 @@ storeConstToAop (int c, asmop * aop, int loffset)
   /* If the value needed is already in A or X, just store it */
   if (m6502_reg_a->isLitConst && m6502_reg_a->litConst == c)
     {
+  DD(emitcode("", ";aconst"));
       storeRegToAop (m6502_reg_a, aop, loffset);
       return;
     }
+    /*
+    TODO: can do this except for X <-> Y
   if (m6502_reg_x->isLitConst && m6502_reg_x->litConst == c)
     {
       storeRegToAop (m6502_reg_x, aop, loffset);
       return;
     }
+  if (m6502_reg_y->isLitConst && m6502_reg_y->litConst == c)
+    {
+      storeRegToAop (m6502_reg_y, aop, loffset);
+      return;
+    }
+    */
 
   switch (aop->type)
     {
     case AOP_REG:
+  DD(emitcode("", ";areg"));
       if (loffset > (aop->size - 1))
         break;
       loadRegFromConst (aop->aopu.aop_reg[loffset], c);
@@ -1432,6 +1448,7 @@ storeConstToAop (int c, asmop * aop, int loffset)
           break;
         }
     default:
+  DD(emitcode("", ";adefault"));
       if (m6502_reg_a->isFree)
         {
           loadRegFromConst (m6502_reg_a, c);
@@ -9510,14 +9527,14 @@ genCast (iCode * ic)
   bool signExtend;
   bool save_a;
 
-  D (emitcode (";     genCast", ""));
-
   /* if they are equivalent then do nothing */
   if (operandsEqu (IC_RESULT (ic), IC_RIGHT (ic)))
     return;
 
   aopOp (right, ic, FALSE);
   aopOp (result, ic, FALSE);
+
+  D (emitcode (";     genCast", "size %d -> %d", right?AOP_SIZE(right):0, result?AOP_SIZE(result):0));
 
   if (IS_BOOL (operandType (result)))
     {
@@ -9552,7 +9569,9 @@ genCast (iCode * ic)
         {
           transferAopAop (AOP (right), 0, AOP (result), 0);
           if (!signExtend)
-            storeConstToAop (0, AOP (result), 1);
+            {
+              storeConstToAop (0, AOP (result), 1);
+            }
           else
             {
               save_a = (AOP (result)->aopu.aop_reg[0] == m6502_reg_a || !m6502_reg_a->isDead);
