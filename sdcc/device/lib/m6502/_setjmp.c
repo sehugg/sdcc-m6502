@@ -65,28 +65,26 @@ _longjmp_PARM_2:
 ;       Stack space usage: 1 bytes.
         .globl ___setjmp
 ___setjmp:
-        stx	(___setjmp_buf + 0)		; msb(buf)
-        sta	(___setjmp_buf + 1)		; lsb(buf)
+        stx	*(___setjmp_buf + 1)		; msb(buf)
+        sta	*(___setjmp_buf + 0)		; lsb(buf)
 
-; TODO
         ; save stack pointer
-;        tsx
-;        pshh
-;        txa
-;        ldhx	(___setjmp_buf)
-;        sta	1,x
-;        pula
-;        sta	0,x
+        tsx
+        ldy	#0
+        txa
+        sta	[___setjmp_buf],y
 
         ; save return address
-;        lda	1,s
-;        sta	2,x
-;        lda	2,s
-;        sta	3,x
+        lda	0x101,x
+        iny
+        sta	[___setjmp_buf],y
+        lda	0x102,x
+        iny
+        sta	[___setjmp_buf],y
 
         ; return 0
-;        clra
-;        tax
+        lda	#0
+        tax
         rts
 
 ;------------------------------------------------------------
@@ -103,35 +101,32 @@ ___setjmp:
         .globl _longjmp
         .globl _longjmp_PARM_2
 _longjmp:
-        stx	(_longjmp_buf + 0)		; msb(buf)
-        sta	(_longjmp_buf + 1)		; lsb(buf)
-
-; TODO
+        stx	*(_longjmp_buf + 1)		; msb(buf)
+        sta	*(_longjmp_buf + 0)		; lsb(buf)
 
         ; restore stack pointer
-;        ldhx	(_longjmp_buf)
-;        lda	0,x
-;        psha
-;        ldx	1,x
-;        pulh
-;        txs
+        ldy	#0
+        lda	[___setjmp_buf],y
+        tax
+        txs
 
         ; set return address
-;        ldhx	(_longjmp_buf)
-;        lda	2,x
-;        sta	1,s
-;        lda	3,x
-;        sta	2,s
+        iny
+        lda	[___setjmp_buf],y
+        sta	0x101,x
+        iny
+        lda	[___setjmp_buf],y
+        sta	0x102,x
 
 ;_setjmp.c:224: return rv ? rv : 1;
-;        ldx     (_longjmp_PARM_2 + 0)
-;        txa
-;        ora     (_longjmp_PARM_2 + 1)
-;        beq     0001$
-;        lda     (_longjmp_PARM_2 + 1)
-;        rts
+        ldx     *(_longjmp_PARM_2 + 1)
+        txa
+        ora     *(_longjmp_PARM_2 + 0)
+        beq     0001$
+        lda     *(_longjmp_PARM_2 + 0)
+        rts
 0001$:
-;        lda     #0x01
+        lda     #0x01
         rts
 
         __endasm;
