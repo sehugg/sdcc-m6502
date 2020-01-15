@@ -1900,12 +1900,7 @@ loadRegIndexed (reg_info * reg, int offset, char * rematOfs)
     case A_IDX:
       // TODO: have to remove dead Y loads
       // addr is in (y,x) but y == 0, so 8-bit offset
-      if (rematOfs && m6502_reg_y->isLitConst && m6502_reg_y->litConst == 0)
-        {
-          emitcode ("lda", "(%s+%d),x", rematOfs, offset);
-          regalloc_dry_run_cost += 3;
-        }
-      else if (!rematOfs && offset >= 0 && offset <= 0xff)
+      if (!rematOfs && offset >= 0 && offset <= 0xff)
         {
           storeRegTemp (m6502_reg_x, TRUE);
           storeRegTemp (m6502_reg_h, TRUE);
@@ -2055,12 +2050,7 @@ storeRegIndexed (reg_info * reg, int offset, char * rematOfs)
   switch (reg->rIdx)
     {
     case A_IDX:
-      if (rematOfs && m6502_reg_y->isLitConst && m6502_reg_y->litConst == 0)
-        {
-          emitcode ("sta", "(%s+%d),x", rematOfs, offset);
-          regalloc_dry_run_cost += 3;
-        }
-      else if (!rematOfs && offset >= 0 && offset <= 0xff)
+      if (!rematOfs && offset >= 0 && offset <= 0xff)
         {
           storeRegTemp (m6502_reg_x, TRUE);
           storeRegTemp (m6502_reg_h, TRUE);
@@ -8496,10 +8486,15 @@ genPointerGet (iCode * ic, iCode * pi, iCode * ifx)
         storeRegToAop (m6502_reg_a, AOP (result), i);
       }
       if (pullh) loadRegTemp(m6502_reg_h, TRUE);
-    // use [aa,x] if only 1 byte
-    // TODO: if X is free and Y is not can we load X=0?
+    // use [aa,x] or [aa],y if only 1 byte and offset is known
     } else if (size == 1 && litOffset == 0 && m6502_reg_x->isLitConst && m6502_reg_x->litConst == 0) {
+      // [aa,x] x == 0
       emitcode ("lda", "[%s,x]", aopAdrStr ( AOP(left), 0, TRUE ) );
+      regalloc_dry_run_cost += 2;
+      storeRegToAop (m6502_reg_a, AOP (result), 0);
+    } else if (size == 1 && litOffset >= 0 && litOffset <= 255 && m6502_reg_y->isLitConst && m6502_reg_y->litConst == litOffset) {
+      // [aa],y 255 >= x >= 0
+      emitcode ("lda", "[%s],y", aopAdrStr ( AOP(left), 0, TRUE ) );
       regalloc_dry_run_cost += 2;
       storeRegToAop (m6502_reg_a, AOP (result), 0);
     } else {
