@@ -213,7 +213,7 @@ static bool XAinst_ok(const assignment &a, unsigned short int i, const G_t &G, c
     ic->op == LEFT_OP ||
     ic->op == RIGHT_OP ||
     ic->op == '=' ||  /* both regular assignment and POINTER_SET safe */
-    ic->op == GET_VALUE_AT_ADDRESS ||
+    //ic->op == GET_VALUE_AT_ADDRESS ||
     ic->op == ADDRESS_OF ||
     ic->op == CAST ||
     ic->op == DUMMY_READ_VOLATILE ||
@@ -277,6 +277,10 @@ static bool XAinst_ok(const assignment &a, unsigned short int i, const G_t &G, c
 
   if((ic->op == CRITICAL || ic->op == ENDCRITICAL) && (unused_A || dying_A))
     return(true);
+    
+  // Y must be free
+  if ((ic->op == GET_VALUE_AT_ADDRESS) && (unused_H || dying_H))
+    return true;
 
   return(false);
 }

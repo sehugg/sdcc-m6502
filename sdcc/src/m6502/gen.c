@@ -912,110 +912,6 @@ forceload:
   m6502_useReg (reg);
 }
 
-/*--------------------------------------------------------------------------*/
-/* loadRegHXAfromAop - Load registers A, H, and X from aops.                */
-/*                     This takes care of the tricky cases where the        */
-/*                     sources may be registers that overlap with the       */
-/*                     destination registers. An aop may be NULL if the     */
-/*                     corresponding register does not need to be loaded.   */
-/*--------------------------------------------------------------------------*/
-static void
-loadRegHXAfromAop(asmop * aopH, int ofsH, asmop * aopX, int ofsX, asmop * aopA, int ofsA)
-{
-  /* There are three cases where pairs of registers need to be swapped */
-  if (aopA && aopX && IS_AOPOFS_X (aopA, ofsA) && IS_AOPOFS_A (aopX, ofsX))
-    {
-      /* Swap A and X, load H */
-      pushReg (m6502_reg_a, TRUE);
-      if (aopH)
-        loadRegFromAop (m6502_reg_h, aopH, ofsH);
-      transferRegReg (m6502_reg_x, m6502_reg_a, FALSE);
-      pullReg (m6502_reg_x);
-      return;
-    }
-  if (aopA && aopH && IS_AOPOFS_H (aopA, ofsA) && IS_AOPOFS_A (aopH, ofsH))
-    {
-      /* Swap A and H, load X */
-      pushReg (m6502_reg_a, TRUE);
-      if (aopX)
-        loadRegFromAop (m6502_reg_x, aopX, ofsX);
-      transferRegReg (m6502_reg_h, m6502_reg_a, FALSE);
-      pullReg (m6502_reg_h);
-      return;
-    }
-  if (aopX && aopH && IS_AOPOFS_H (aopX, ofsX) && IS_AOPOFS_X (aopH, ofsH))
-    {
-      /* Swap X and H, load A */
-      pushReg (m6502_reg_x, TRUE);
-      if (aopA)
-        loadRegFromAop (m6502_reg_a, aopA, ofsA);
-      transferRegReg (m6502_reg_h, m6502_reg_x, FALSE);
-      pullReg (m6502_reg_h);
-      return;
-    }
-
-  /* There are two cases where the registers need to rotate */
-  if (aopA && aopH && aopX && IS_AOPOFS_A (aopH, ofsH) && IS_AOPOFS_H (aopX, ofsX) && IS_AOPOFS_X (aopA, ofsA))
-    {
-      /* Rotate A->H->X->A */
-      pushReg (m6502_reg_a, FALSE);
-      transferRegReg (m6502_reg_x, m6502_reg_a, FALSE);
-      transferRegReg (m6502_reg_h, m6502_reg_x, FALSE);
-      pullReg (m6502_reg_h);
-      return;
-    }
-  if (aopA && aopH && aopX && IS_AOPOFS_A (aopX, ofsX) && IS_AOPOFS_X (aopH, ofsH) && IS_AOPOFS_H (aopA, ofsA))
-    {
-      /* Rotate A->X->H->A */
-      pushReg (m6502_reg_a, FALSE);
-      transferRegReg (m6502_reg_h, m6502_reg_a, FALSE);
-      transferRegReg (m6502_reg_x, m6502_reg_h, FALSE);
-      pullReg (m6502_reg_x);
-      return;
-    }
-
-  /* At this point there can be at most 1 overlapping register source. */
-  if (aopX && (aopX->type == AOP_REG) && !IS_AOP_WITH_X (aopX))
-    {
-      loadRegFromAop (m6502_reg_x, aopX, ofsX);
-      if (aopA)
-        m6502_freeReg (m6502_reg_a); /* in case it's needed to load H */
-      if (aopH)
-        loadRegFromAop (m6502_reg_h, aopH, ofsH);
-      if (aopA)
-        loadRegFromAop (m6502_reg_a, aopA, ofsA);
-      return;
-    }
-  if (aopH && (aopH->type == AOP_REG) && !IS_AOP_WITH_H (aopH))
-    {
-      if (aopA)
-        m6502_freeReg (m6502_reg_a); /* in case it's needed to load H */
-      if (aopX)
-        m6502_freeReg (m6502_reg_x); /* in case it's needed to load H */
-      loadRegFromAop (m6502_reg_h, aopH, ofsH);
-      if (aopX)
-        loadRegFromAop (m6502_reg_x, aopX, ofsX);
-      if (aopA)
-        loadRegFromAop (m6502_reg_a, aopA, ofsA);
-      return;
-    }
-    
-  /* Either A needs to be loaded first or the order no longer matters */
-  if (aopA)
-    loadRegFromAop (m6502_reg_a, aopA, ofsA);
-  if (aopX)
-    m6502_freeReg (m6502_reg_x); /* in case it's needed to load H */
-  if (aopH && aopX && (aopH == aopX) && (ofsH == (ofsX+1)))
-    loadRegFromAop (m6502_reg_hx, aopX, ofsX);
-  else
-    {
-      if (aopH)
-        loadRegFromAop (m6502_reg_h, aopH, ofsH);
-      if (aopX)
-        loadRegFromAop (m6502_reg_x, aopX, ofsX);
-    }
-}
-
 // get any free 8-bit register
 static reg_info* getFreeByteReg() {
   if (m6502_reg_a->isFree)
@@ -1289,8 +1185,11 @@ loadRegFromConst (reg_info * reg, int c)
 
       if (m6502_reg_a->isLitConst && m6502_reg_a->litConst == c)
         transferRegReg (m6502_reg_a, reg, FALSE);
+        /*
+        TODO does not work for X<->Y
       else if (m6502_reg_x->isLitConst && m6502_reg_x->litConst == c)
         transferRegReg (m6502_reg_x, reg, FALSE);
+        */
       else
         {
           emitcode ("ldy", "!immedbyte", c);
@@ -1406,7 +1305,6 @@ storeConstToAop (int c, asmop * aop, int loffset)
   /* If the value needed is already in A or X, just store it */
   if (m6502_reg_a->isLitConst && m6502_reg_a->litConst == c)
     {
-  DD(emitcode("", ";aconst"));
       storeRegToAop (m6502_reg_a, aop, loffset);
       return;
     }
@@ -1427,7 +1325,6 @@ storeConstToAop (int c, asmop * aop, int loffset)
   switch (aop->type)
     {
     case AOP_REG:
-  DD(emitcode("", ";areg"));
       if (loffset > (aop->size - 1))
         break;
       loadRegFromConst (aop->aopu.aop_reg[loffset], c);
@@ -1448,7 +1345,6 @@ storeConstToAop (int c, asmop * aop, int loffset)
           break;
         }
     default:
-  DD(emitcode("", ";adefault"));
       if (m6502_reg_a->isFree)
         {
           loadRegFromConst (m6502_reg_a, c);
@@ -1683,27 +1579,31 @@ transferAopAop (asmop *srcaop, int srcofs, asmop *dstaop, int dstofs)
       keepreg = TRUE;
     }
 
-  afree = m6502_reg_a->isFree;
-
   // TODO: pick reg based on if can load op?
+  // TODO: afree sucks, need stack
   if (!reg)
     {
       reg = getFreeByteReg();
       if (reg == NULL)
         {
+          afree = m6502_reg_a->isFree;
           pushReg (m6502_reg_a, TRUE);
           needpula = TRUE;
           reg = m6502_reg_a;
         }
+      else
+        afree = reg->isFree;
     }
+  else
+    afree = reg->isFree;
 
   loadRegFromAop (reg, srcaop, srcofs);
   storeRegToAop (reg, dstaop, dstofs);
 
   if (!keepreg)
-    pullOrFreeReg (m6502_reg_a, needpula);
+    pullOrFreeReg (reg, needpula);
 
-  m6502_reg_a->isFree = afree;
+  //reg->isFree = afree;
 }
 
 /*--------------------------------------------------------------------------*/
@@ -2058,6 +1958,71 @@ loadRegIndexed (reg_info * reg, int offset, char * rematOfs)
       pushReg (m6502_reg_a, FALSE);
       needpula = TRUE;
       loadRegIndexed (m6502_reg_x, offset+1, rematOfs);
+      break;
+    default:
+      wassert (0);
+    }
+  pullOrFreeReg (m6502_reg_a, needpula);
+}
+
+static int prepTempOfs = -1;
+static char* tempRematOfs = "???";
+
+/*--------------------------------------------------------------------------*/
+/* loadRegIndexed2 - Load a register using indexed addressing mode.          */
+/*                  NOTE: offset is physical (not logical)                  */
+/* must call preparePointer() first */
+/*--------------------------------------------------------------------------*/
+static void
+loadRegIndexed2 (reg_info * reg, int offset)
+{
+  bool needpula = FALSE;
+
+  /* force offset to signed 16-bit range */
+  offset &= 0xffff;
+  if (offset & 0x8000)
+    offset = 0x10000 - offset;
+
+  DD (emitcode ("", ";     loadRegIndexed (%s, %d)", reg->name, offset));
+
+// TODO: mostly awful
+  switch (reg->rIdx)
+    {
+    case A_IDX:
+      // TODO: have to remove dead Y loads
+      // addr is in (y,x) but y == 0, so 8-bit offset
+      if (prepTempOfs < 0)
+        {
+          emitcode ("lda", "(%s+%d),y", tempRematOfs, offset);
+          regalloc_dry_run_cost += 2;
+        }
+      else
+        {
+          loadRegFromConst(m6502_reg_y, offset);
+          emitcode ("lda", TEMPFMT_IY, prepTempOfs);
+          regalloc_dry_run_cost += 2;
+        }
+      m6502_dirtyReg (reg, FALSE);
+      break;
+    case X_IDX:
+    case H_IDX:	
+      pushReg (m6502_reg_a, FALSE);
+      needpula = TRUE;
+      loadRegIndexed2 (m6502_reg_a, offset);
+      transferRegReg (m6502_reg_a, reg, TRUE);
+      break;
+    case HX_IDX:
+      loadRegIndexed2 (m6502_reg_a, offset+1);
+      pushReg (m6502_reg_a, FALSE);
+      loadRegIndexed2 (m6502_reg_a, offset);
+      transferRegReg (m6502_reg_a, m6502_reg_x, TRUE);
+      pullReg (m6502_reg_h);
+      break;
+    case XA_IDX:
+      loadRegIndexed2 (m6502_reg_a, offset);
+      pushReg (m6502_reg_a, FALSE);
+      needpula = TRUE;
+      loadRegIndexed2 (m6502_reg_x, offset+1);
       break;
     default:
       wassert (0);
@@ -3157,7 +3122,6 @@ aopAdrStr (asmop * aop, int loffset, bool bit16)
       if (regalloc_dry_run) {
         return "1,x"; // fake result, not needed
       } else {
-        bool needpullx = FALSE;
         // did we get stack pointer in X?
         if (m6502_reg_x->aop == &tsxaop) {
           // hc08's tsx returns +1, ours returns +0
@@ -8372,6 +8336,76 @@ genDataPointerGet (operand * left, operand * right, operand * result, iCode * ic
     }
 }
 
+/* copy pointer into TEMP+i zero-page location, and load Y if needed */
+/* return -1 if can be absolute indexed */
+static int
+preparePointer (operand* left, int offset, char* rematOfs)
+{
+  // TODO: really do we need this?
+  asmop *newaop = newAsmop (AOP_DIR);
+  newaop->aopu.aop_dir = "__TEMP";
+  newaop->size = 2;
+  
+  /* The rematerialized offset may have a "#" prefix; skip over it */
+  if (rematOfs && rematOfs[0] == '#')
+    rematOfs++;
+  if (rematOfs && !rematOfs[0])
+    rematOfs = NULL;
+
+  /* force offset to signed 16-bit range */
+  offset &= 0xffff;
+  if (offset & 0x8000)
+    offset = 0x10000 - offset;
+
+  DD (emitcode ("", ";     preparePointer (%s, %d, %s)", aopName(AOP(left)), offset, rematOfs));
+
+  tempRematOfs = rematOfs;
+
+  // 8-bit absolute offset? (remat+offset,y)
+  // TODO: better way than checking register?
+  if (rematOfs && AOP_TYPE(left) == AOP_REG && AOP(left)->aopu.aop_reg[1]->isLitConst && AOP(left)->aopu.aop_reg[1]->litConst == 0)
+    {
+      // transfer lower byte of offset to Y
+      transferRegReg(AOP(left)->aopu.aop_reg[0], m6502_reg_y, TRUE);
+      return (prepTempOfs = -1);
+    }
+
+  // need to do pointer math?
+  if (!rematOfs && offset >= 0 && offset <= 255-4)
+    {
+      // just copy, we can add the remaining offset to Y later
+      transferAopAop(AOP(left), 0, newaop, 0);
+      transferAopAop(AOP(left), 1, newaop, 1);
+    }
+  else
+    {
+      bool needpulla = pushRegIfSurv(m6502_reg_a);
+      loadRegFromAop(m6502_reg_a, AOP(left), 0);
+      emitcode ("clc", "");
+      emitcode ("adc", "#<(%s+%d)", rematOfs, offset);
+      emitcode ("sta", TEMPFMT, _G.tempOfs+0);
+      loadRegFromAop(m6502_reg_a, AOP(left), 1);
+      emitcode ("adc", "#>(%s+%d)", rematOfs, offset);
+      emitcode ("sta", TEMPFMT, _G.tempOfs+1);
+      regalloc_dry_run_cost += 9;
+      pullOrFreeReg (m6502_reg_a, needpulla);
+    }
+    
+  Safe_free (newaop);
+  prepTempOfs = _G.tempOfs;
+  _G.tempOfs += 2;
+  wassertl (_G.tempOfs < NUM_TEMP_REGS, "storeRegTemp(): overflow");
+  return prepTempOfs;
+}
+
+static void unpreparePointer()
+{
+  if (prepTempOfs >= 0)
+    {
+      _G.tempOfs -= 2;
+      prepTempOfs = -2;
+    }
+}
 
 /*-----------------------------------------------------------------*/
 /* genPointerGet - generate code for pointer get                   */
@@ -8382,14 +8416,14 @@ genPointerGet (iCode * ic, iCode * pi, iCode * ifx)
   operand *left = IC_LEFT (ic);
   operand *right = IC_RIGHT (ic);
   operand *result = IC_RESULT (ic);
-  int size, offset, xoffset;
+  int size, offset;
   int litOffset = 0;
   char * rematOffset = NULL;
   sym_link *retype = getSpec (operandType (result));
   bool needpulla = FALSE;
   bool needpullh = FALSE;
   bool needpullx = FALSE;
-  bool vol = FALSE;
+  // TODO? bool vol = FALSE;
 
   if ((size = getSize (operandType (result))) > 1)
     ifx = NULL;
@@ -8440,27 +8474,43 @@ genPointerGet (iCode * ic, iCode * pi, iCode * ifx)
 
   D (emitcode ("", ";     genPointerGet (%s)", aopName(AOP(left)), litOffset, rematOffset ));
   
-  // shortcut for [aa],y (or [aa,x]) if already in zero-page
-  // and we're not storing to the pointer itself
-  if (AOP_TYPE (left) == AOP_DIR && !rematOffset && litOffset >= 0 && litOffset <= 256-size
-      && !sameRegs(AOP(left), AOP(result)) ) {
+  needpulla = pushRegIfSurv (m6502_reg_a);
   
-    needpulla = pushRegIfSurv (m6502_reg_a);
+  // shortcut for [aa],y (or [aa,x]) if already in zero-page
+  if (AOP_TYPE (left) == AOP_DIR && !rematOffset && litOffset >= 0 && litOffset <= 256-size)
+  {
+    // and we're storing to the pointer itself, copy onto stack first
+    if (sameRegs(AOP(left), AOP(result)) ) {
+      bool pullh = storeRegTempIfSurv (m6502_reg_h);
+      // push the values
+      for (int i=size-1; i>=0; i--) {
+        loadRegFromConst(m6502_reg_h, litOffset + i);
+        emitcode ("lda", "[%s],y", aopAdrStr ( AOP(left), 0, TRUE ) );
+        regalloc_dry_run_cost += 2;
+        if (i != 0) pushReg(m6502_reg_a, FALSE);
+      }
+      // pull the values
+      for (int i=0; i<size; i++) {
+        loadRegFromConst(m6502_reg_h, litOffset + i);
+        if (i != 0) pullReg(m6502_reg_a);
+        storeRegToAop (m6502_reg_a, AOP (result), i);
+      }
+      if (pullh) loadRegTemp(m6502_reg_h, TRUE);
     // use [aa,x] if only 1 byte
     // TODO: if X is free and Y is not can we load X=0?
-    if (size == 1 && litOffset == 0 && m6502_reg_x->isLitConst && m6502_reg_x->litConst == 0) {
+    } else if (size == 1 && litOffset == 0 && m6502_reg_x->isLitConst && m6502_reg_x->litConst == 0) {
       emitcode ("lda", "[%s,x]", aopAdrStr ( AOP(left), 0, TRUE ) );
-      regalloc_dry_run_cost += 3;
+      regalloc_dry_run_cost += 2;
       storeRegToAop (m6502_reg_a, AOP (result), 0);
     } else {
       // otherwise use [aa],y
-      bool pullh = storeRegTempIfSurv (m6502_reg_h); // TODO: not needed if using (aa,x)
+      bool pullh = storeRegTempIfSurv (m6502_reg_h);
       if (IS_AOP_XA(AOP(result))) {
         // reverse order so A is last
         for (int i=size-1; i>=0; i--) {
           loadRegFromConst(m6502_reg_h, litOffset + i);
           emitcode ("lda", "[%s],y", aopAdrStr ( AOP(left), 0, TRUE ) );
-          regalloc_dry_run_cost += 3;
+          regalloc_dry_run_cost += 2;
           storeRegToAop (m6502_reg_a, AOP (result), i);
         }
       } else {
@@ -8468,7 +8518,7 @@ genPointerGet (iCode * ic, iCode * pi, iCode * ifx)
         for (int i=0; i<size; i++) {
           loadRegFromConst(m6502_reg_h, litOffset + i);
           emitcode ("lda", "[%s],y", aopAdrStr ( AOP(left), 0, TRUE ) );
-          regalloc_dry_run_cost += 3;
+          regalloc_dry_run_cost += 2;
           storeRegToAop (m6502_reg_a, AOP (result), i);
         }
       }
@@ -8477,20 +8527,10 @@ genPointerGet (iCode * ic, iCode * pi, iCode * ifx)
     goto release;
   }
   
-  // TODO: don't use HX anymore, use ZP
+  /* get pointer address into TEMP var */
+  int ptrofs = preparePointer (left, litOffset, rematOffset);
+  /* so TEMP+ptrofs now contains the address, unless ptrofs < 0 */
   
-  needpulla = pushRegIfSurv (m6502_reg_a);
-  if (!IS_AOP_HX (AOP (left)))
-    {
-      needpullx = pushRegIfSurv (m6502_reg_x);
-      needpullh = pushRegIfSurv (m6502_reg_h);
-    }
-
-  /* if the operand is already in hx
-     then we do nothing else we move the value to hx */
-  loadRegFromAop (m6502_reg_hx, AOP (left), 0);
-  /* so hx now contains the address */
-
   if (AOP_TYPE (result) == AOP_REG)
     {
       if (pi)
@@ -8502,11 +8542,12 @@ genPointerGet (iCode * ic, iCode * pi, iCode * ifx)
             {
               if (IS_AOP_H (AOP (result)))
                 m6502_freeReg (m6502_reg_x);
-              loadRegIndexed (AOP (result)->aopu.aop_reg[0], litOffset, rematOffset);
+              loadRegIndexed2 (AOP (result)->aopu.aop_reg[0], litOffset);
             }
           else
             {
-              loadRegIndexed (m6502_reg_a, litOffset, rematOffset);
+              // TODO?
+              loadRegIndexed2 (m6502_reg_a, litOffset);
               m6502_useReg (m6502_reg_a);
               emitcode ("aix", "#%d", size);
               regalloc_dry_run_cost += 2;
@@ -8523,17 +8564,17 @@ genPointerGet (iCode * ic, iCode * pi, iCode * ifx)
             {
   DD (emitcode (";     IS_AOP_HX", ""));
               m6502_freeReg (m6502_reg_x); // TODO???
-              loadRegIndexed (m6502_reg_hx, litOffset, rematOffset);
+              loadRegIndexed2 (m6502_reg_hx, litOffset);
             }
           else if (IS_AOP_XA (AOP (IC_RESULT (ic))))
             {
   DD (emitcode (";     IS_AOP_XA", ""));
-              loadRegIndexed (m6502_reg_xa, litOffset, rematOffset);
+              loadRegIndexed2 (m6502_reg_xa, litOffset);
             }
           else if (IS_AOP_AX (AOP (IC_RESULT (ic)))) // TODO?
             {
   DD (emitcode (";     IS_AOP_AX", ""));
-              loadRegIndexed (m6502_reg_hx, litOffset, rematOffset);
+              loadRegIndexed2 (m6502_reg_hx, litOffset);
               transferRegReg (m6502_reg_h, m6502_reg_a, TRUE);
             }
         }
@@ -8545,23 +8586,25 @@ genPointerGet (iCode * ic, iCode * pi, iCode * ifx)
     }
   else if (!pi && !ifx && size == 2 && IS_M65C02 && m6502_reg_x->isDead && m6502_reg_h->isDead && AOP_TYPE (result) == AOP_EXT) /* Todo: Use this for bigger sizes, too */
     {
-      loadRegIndexed (m6502_reg_hx, litOffset, rematOffset);
+      loadRegIndexed2 (m6502_reg_hx, litOffset);
       storeRegToAop (m6502_reg_hx, AOP (result), 0);
     }
   else if (!pi && !ifx && size == 1 && m6502_reg_x->isDead && !m6502_reg_a->isDead)
     {
-      loadRegIndexed (m6502_reg_x, litOffset, rematOffset);
+      loadRegIndexed2 (m6502_reg_x, litOffset);
       storeRegToAop (m6502_reg_x, AOP (result), 0);
     }
   else
     {
       for (offset=0; offset<size; offset++)
         {
-          loadRegIndexed (m6502_reg_a, litOffset + offset, rematOffset);
+          loadRegIndexed2 (m6502_reg_a, litOffset + offset);
           if (!ifx)
             storeRegToAop (m6502_reg_a, AOP (result), offset);
         }
     }
+    
+  unpreparePointer();
 
 release:
   size = AOP_SIZE (result);
@@ -9071,7 +9114,9 @@ genPointerSet (iCode * ic, iCode * pi)
     {
       if (size == 1)
         {
-          loadRegHXAfromAop(AOP (result), 1, AOP (result), 0, AOP (right), 0 );
+          pushReg (AOP (right)->aopu.aop_reg[0], TRUE);
+          loadRegFromAop (m6502_reg_hx, AOP (result), 0);
+          pullReg (m6502_reg_a);
           storeRegIndexed (m6502_reg_a, litOffset, rematOffset);
         }
       else if (IS_AOP_XA (AOP (right)) || IS_AOP_HX (AOP (right)))
