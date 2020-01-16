@@ -212,7 +212,7 @@ static bool XAinst_ok(const assignment &a, unsigned short int i, const G_t &G, c
     ic->op == GETWORD ||
     ic->op == LEFT_OP ||
     ic->op == RIGHT_OP ||
-    ic->op == '=' ||  /* both regular assignment and POINTER_SET safe */
+    //ic->op == '=' ||  /* both regular assignment and POINTER_SET safe */
     //ic->op == GET_VALUE_AT_ADDRESS ||
     ic->op == ADDRESS_OF ||
     ic->op == CAST ||
@@ -280,6 +280,10 @@ static bool XAinst_ok(const assignment &a, unsigned short int i, const G_t &G, c
     
   // Y must be free
   if ((ic->op == GET_VALUE_AT_ADDRESS) && (unused_H || dying_H))
+    return true;
+  if ((ic->op == '=') && !POINTER_SET(ic))
+    return true;
+  if ((ic->op == '=') && (unused_H || dying_H))
     return true;
 
   return(false);
