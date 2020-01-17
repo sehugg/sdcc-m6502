@@ -281,9 +281,9 @@ static bool XAinst_ok(const assignment &a, unsigned short int i, const G_t &G, c
   // Y must be free
   if ((ic->op == GET_VALUE_AT_ADDRESS) && (unused_H || dying_H))
     return true;
-  if ((ic->op == '=') && !POINTER_SET(ic))
+  if (POINTER_SET(ic) && (unused_H || dying_H))
     return true;
-  if ((ic->op == '=') && (unused_H || dying_H))
+  if (ic->op == '=')
     return true;
 
   return(false);

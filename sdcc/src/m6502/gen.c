@@ -4715,6 +4715,10 @@ genPlusIncr (iCode * ic)
   if (!sameRegs (AOP (left), AOP (result)))
     return FALSE;
 
+  // TODO: can inc blah,x
+  if (!aopCanIncDec (AOP (result)))
+    return FALSE;
+
   D (emitcode (";     genPlusIncr", ""));
 
   aopOpExtToIdx (AOP (result), AOP (left), NULL);
@@ -4892,6 +4896,10 @@ genMinusDec (iCode * ic)
     return FALSE;
 
   if (size != 1)
+    return FALSE;
+
+  // TODO: can inc blah,x
+  if (!aopCanIncDec (AOP (result)))
     return FALSE;
 
   D (emitcode (";     genMinusDec", ""));
@@ -8429,7 +8437,8 @@ preparePointer (operand* left, int offset, char* rematOfs, bool usedA)
     }
   else
     {
-      bool needpulla = usedA ? pushRegIfUsed(m6502_reg_a) : pushRegIfSurv(m6502_reg_a);
+      bool needpulla = true; // TODO? usedA ? pushRegIfUsed(m6502_reg_a) : pushRegIfSurv(m6502_reg_a);
+      pushReg(m6502_reg_a, FALSE);
       loadRegFromAop(m6502_reg_a, AOP(left), 0);
       emitcode ("clc", "");
       emitcode ("adc", "#<(%s+%d)", rematOfs, offset);
@@ -9166,9 +9175,6 @@ genPointerSet (iCode * ic, iCode * pi)
     }
   else if (AOP_TYPE (right) == AOP_REG)
     {
-      emitcode("", ";needpulla = %d", needpulla);
-      pullOrFreeReg (m6502_reg_a, needpulla);
-      needpulla = FALSE;
       if (size == 1)
         {
           loadRegFromAop (m6502_reg_a, AOP (right), 0);
