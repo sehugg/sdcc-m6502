@@ -1963,6 +1963,7 @@ loadRegIndexed (reg_info * reg, int offset, char * rematOfs)
 
 static int prepTempOfs = -1;
 static char* tempRematOfs = "???";
+static bool prepSwapAY;
 
 /*--------------------------------------------------------------------------*/
 /* loadRegIndexed2 - Load a register using indexed addressing mode.          */
@@ -8396,8 +8397,9 @@ genDataPointerGet (operand * left, operand * right, operand * result, iCode * ic
 
 /* copy pointer into TEMP+i zero-page location, and load Y if needed */
 /* return -1 if can be absolute indexed */
+/* left is address, right is value to write or NULL */
 static int
-preparePointer (operand* left, int offset, char* rematOfs, bool usedA)
+preparePointer (operand* left, int offset, char* rematOfs, operand* right)
 {
   // TODO: really do we need this?
   asmop *newaop = newAsmop (AOP_DIR);
@@ -8418,13 +8420,24 @@ preparePointer (operand* left, int offset, char* rematOfs, bool usedA)
   DD (emitcode ("", ";     preparePointer (%s, %d, %s) temp %d", aopName(AOP(left)), offset, rematOfs, _G.tempOfs));
 
   tempRematOfs = rematOfs;
+  prepSwapAY = false;
 
   // 8-bit absolute offset? (remat+offset,y)
   // TODO: better way than checking register?
   if (rematOfs && AOP_TYPE(left) == AOP_REG && (AOP_SIZE(left) < 2 || AOP(left)->aopu.aop_reg[1]->isLitConst && AOP(left)->aopu.aop_reg[1]->litConst == 0))
     {
-      // transfer lower byte of offset to Y
-      transferRegReg(AOP(left)->aopu.aop_reg[0], m6502_reg_y, TRUE);
+      // TODO: what if Y is right and AX is pointer?
+      prepSwapAY = right && AOP(left)->aopu.aop_reg[0] == m6502_reg_a && AOP_TYPE(right) == AOP_REG && IS_AOP_WITH_Y(AOP(right));
+      if (prepSwapAY) {
+        // swap A and Y
+        DD( emitcode("", "; swap A and Y"));
+        storeRegTemp(m6502_reg_a, TRUE);
+        transferRegReg(m6502_reg_y, m6502_reg_a, TRUE);
+        loadRegTemp(m6502_reg_y, TRUE);
+      } else {
+        // transfer lower byte of offset to Y
+        transferRegReg(AOP(left)->aopu.aop_reg[0], m6502_reg_y, TRUE);
+      }
       return (prepTempOfs = -1);
     }
 
@@ -8587,7 +8600,7 @@ genPointerGet (iCode * ic, iCode * pi, iCode * ifx)
   }
   
   /* get pointer address into TEMP var */
-  int ptrofs = preparePointer (left, litOffset, rematOffset, false);
+  int ptrofs = preparePointer (left, litOffset, rematOffset, NULL);
   /* so TEMP+ptrofs now contains the address, unless ptrofs < 0 */
   
   if (AOP_TYPE (result) == AOP_REG)
@@ -9163,9 +9176,9 @@ genPointerSet (iCode * ic, iCode * pi)
   needpulla = pushRegIfSurv (m6502_reg_a);
   needpullx = pushRegIfSurv (m6502_reg_x);
   needpullh = pushRegIfSurv (m6502_reg_h);
-
+  
   /* get pointer address into TEMP var */
-  int ptrofs = preparePointer (result, litOffset, rematOffset, true);
+  int ptrofs = preparePointer (result, litOffset, rematOffset, right);
   /* so TEMP+ptrofs now contains the address, unless ptrofs < 0 */  
 
   /* if bit then pack */
@@ -9177,7 +9190,8 @@ genPointerSet (iCode * ic, iCode * pi)
     {
       if (size == 1)
         {
-          loadRegFromAop (m6502_reg_a, AOP (right), 0);
+          if (!prepSwapAY)
+            loadRegFromAop (m6502_reg_a, AOP (right), 0);
           storeRegIndexed2 (m6502_reg_a, litOffset);
         }
       else if (IS_AOP_XA (AOP (right)) || IS_AOP_HX (AOP (right)))
