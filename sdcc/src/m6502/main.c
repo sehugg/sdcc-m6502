@@ -389,6 +389,7 @@ static bool cseCostEstimation (iCode *ic, iCode *pdic)
 static bool
 hasExtBitOp (int op, int size)
 {
+  // TODO: doesn't seem to use RLC/RRC
   if (op == RRC
       || op == RLC
       //|| (op == SWAP && size <= 2)

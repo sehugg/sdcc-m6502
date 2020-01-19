@@ -2017,8 +2017,6 @@ loadRegIndexed2 (reg_info * reg, int offset)
       break;
     case XA_IDX:
       loadRegIndexed2 (m6502_reg_a, offset);
-      pushReg (m6502_reg_a, FALSE);
-      needpula = TRUE;
       loadRegIndexed2 (m6502_reg_x, offset+1);
       break;
     default:
@@ -8634,18 +8632,15 @@ genPointerGet (iCode * ic, iCode * pi, iCode * ifx)
         {
           if (IS_AOP_HX (AOP (IC_RESULT (ic))))
             {
-  DD (emitcode (";     IS_AOP_HX", ""));
               m6502_freeReg (m6502_reg_x); // TODO???
               loadRegIndexed2 (m6502_reg_hx, litOffset);
             }
           else if (IS_AOP_XA (AOP (IC_RESULT (ic))))
             {
-  DD (emitcode (";     IS_AOP_XA", ""));
               loadRegIndexed2 (m6502_reg_xa, litOffset);
             }
           else if (IS_AOP_AX (AOP (IC_RESULT (ic)))) // TODO?
             {
-  DD (emitcode (";     IS_AOP_AX", ""));
               loadRegIndexed2 (m6502_reg_hx, litOffset);
               transferRegReg (m6502_reg_h, m6502_reg_a, TRUE);
             }
