@@ -9163,11 +9163,22 @@ genPointerSet (iCode * ic, iCode * pi)
     } else {
       // otherwise use [aa],y
       needpullh = pushRegIfUsed (m6502_reg_h);
-      for (int i=0; i<size; i++) {
-        loadRegFromAop (m6502_reg_a, AOP (right), i);
-        loadRegFromConst(m6502_reg_h, litOffset + i);
-        emitcode ("sta", "[%s],y", aopAdrStr ( AOP(result), 0, TRUE ) );
-        regalloc_dry_run_cost += 2;
+      if (IS_AOP_AX(AOP(right))) {
+        // reverse order so A is first
+        for (int i=size-1; i>=0; i--) {
+          loadRegFromAop (m6502_reg_a, AOP (right), i);
+          loadRegFromConst(m6502_reg_h, litOffset + i);
+          emitcode ("sta", "[%s],y", aopAdrStr ( AOP(result), 0, TRUE ) );
+          regalloc_dry_run_cost += 2;
+        }
+      } else {
+        // forward order
+        for (int i=0; i<size; i++) {
+          loadRegFromAop (m6502_reg_a, AOP (right), i);
+          loadRegFromConst(m6502_reg_h, litOffset + i);
+          emitcode ("sta", "[%s],y", aopAdrStr ( AOP(result), 0, TRUE ) );
+          regalloc_dry_run_cost += 2;
+        }
       }
     }
     goto release;
