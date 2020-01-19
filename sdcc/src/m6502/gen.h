@@ -91,5 +91,7 @@ extern unsigned fReturnSizeM6502;
 iCode *hasIncm6502 (operand *op, const iCode *ic, int osize);
 extern bool m6502_assignment_optimal;
 
+#define NUM_TEMP_REGS 8
+
 #endif
 

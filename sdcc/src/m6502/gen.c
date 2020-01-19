@@ -52,7 +52,6 @@ static void pullOrFreeReg (reg_info * reg, bool needpull);
 static char *zero = "#0x00";
 static char *one = "#0x01";
 
-#define NUM_TEMP_REGS 4
 static char *TEMPFMT = "*(__TEMP+%d)";
 static char *TEMPFMT_IND = "[__TEMP+%d]";
 static char *TEMPFMT_IY = "[__TEMP+%d],y";
@@ -462,6 +461,27 @@ storeRegTempIfSurv (reg_info *reg)
     return storeRegTemp (reg, TRUE);
   else
     return FALSE;
+}
+
+static bool
+storeRegTempIfUsed (reg_info *reg)
+{
+  if (!reg->isFree)
+    {
+      storeRegTemp (reg, TRUE);
+      return TRUE;
+    }
+  else
+    return FALSE;
+}
+
+static void
+loadOrFreeRegTemp (reg_info * reg, bool needpull)
+{
+  if (needpull)
+    loadRegTemp (reg, TRUE);
+  else
+    m6502_freeReg (reg);
 }
 
 /*--------------------------------------------------------------------------*/
@@ -9157,7 +9177,7 @@ genPointerSet (iCode * ic, iCode * pi)
       regalloc_dry_run_cost += 2;
     } else {
       // otherwise use [aa],y
-      needpullh = pushRegIfUsed (m6502_reg_h);
+      needpullh = storeRegTempIfUsed (m6502_reg_h);
       if (IS_AOP_AX(AOP(right))) {
         // reverse order so A is first
         for (int i=size-1; i>=0; i--) {
@@ -9180,8 +9200,8 @@ genPointerSet (iCode * ic, iCode * pi)
   }
 
   needpulla = pushRegIfSurv (m6502_reg_a);
-  needpullx = pushRegIfSurv (m6502_reg_x);
-  needpullh = pushRegIfSurv (m6502_reg_h);
+  needpullx = storeRegTempIfSurv (m6502_reg_x);
+  needpullh = storeRegTempIfSurv (m6502_reg_h);
   
   /* get pointer address into TEMP var */
   int ptrofs = preparePointer (result, litOffset, rematOffset, right);
@@ -9224,7 +9244,7 @@ genPointerSet (iCode * ic, iCode * pi)
         }
       else if (IS_AOP_AX (AOP (right)))
         {
-          pushReg (m6502_reg_x, TRUE);
+          pushReg (m6502_reg_x, TRUE); // TODO??
           storeRegIndexed2 (m6502_reg_a, litOffset+1);
           pullReg (m6502_reg_a); // X
           storeRegIndexed2 (m6502_reg_a, litOffset);
@@ -9262,8 +9282,8 @@ release:
       pi->generated = 1;
     }
 
-  pullOrFreeReg (m6502_reg_h, needpullh);
-  pullOrFreeReg (m6502_reg_x, needpullx);
+  loadOrFreeRegTemp (m6502_reg_h, needpullh);
+  loadOrFreeRegTemp (m6502_reg_x, needpullx);
   pullOrFreeReg (m6502_reg_a, needpulla);
 }
 

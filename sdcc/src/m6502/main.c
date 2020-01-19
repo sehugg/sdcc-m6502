@@ -218,7 +218,7 @@ _m6502_genAssemblerPreamble (FILE * of)
     {
       // global variables in zero page
       fprintf (of, "\t.area %s\n",port->mem.data_name);
-      fprintf (of, "__TEMP:\t.ds 8\n");
+      fprintf (of, "__TEMP:\t.ds %d\n", NUM_TEMP_REGS);
       fprintf (of, "__BASEPTR:\t.ds 2\n");
       // generate interrupt vector table (TODO)
       fprintf (of, "\t.area\tCODEIVT (ABS)\n");
