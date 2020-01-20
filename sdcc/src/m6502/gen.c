@@ -3941,7 +3941,7 @@ assignResultValue (operand * oper)
     {
       if (!offset && AOP_TYPE (oper) == AOP_REG && AOP_SIZE (oper) > 1 && AOP (oper)->aopu.aop_reg[0]->rIdx == X_IDX)
         {
-          pushReg (m6502_reg_a, TRUE);
+          storeRegTemp (m6502_reg_a, TRUE);
           delayed_x = TRUE;
         }
       else
@@ -3951,7 +3951,7 @@ assignResultValue (operand * oper)
       offset++;
     }
   if (delayed_x)
-    pullReg (m6502_reg_x);
+    loadRegTemp (m6502_reg_x, TRUE);
 }
 
 
@@ -4114,9 +4114,9 @@ genSend (set *sendSet)
         {
           /* If the parameters' register assignment is exactly backwards */
           /* from what is needed, then swap the registers. */
-          pushReg (m6502_reg_a, FALSE);
+          storeRegTemp(m6502_reg_a, TRUE);
           transferRegReg (m6502_reg_x, m6502_reg_a, FALSE);
-          pullReg (m6502_reg_x);
+          loadRegTemp(m6502_reg_x, TRUE);
         }
       else if (IS_AOP_A (AOP (IC_LEFT (send2))))
         {
@@ -4551,7 +4551,7 @@ genEndFunction (iCode * ic)
     {
 
       if (!inExcludeList ("h"))
-        pullReg (m6502_reg_h);
+        pullReg (m6502_reg_h); // TODO?
 
 
       /* if debug then send end of function */
@@ -9851,7 +9851,7 @@ genReceive (iCode * ic)
         {
           if (AOP_TYPE (IC_RESULT (ic)) == AOP_REG && !(offset + (ic->argreg - 1)) && AOP (IC_RESULT (ic))->aopu.aop_reg[0]->rIdx == X_IDX && size)
             {
-              pushReg (m6502_reg_a, TRUE);
+              storeRegTemp (m6502_reg_a, TRUE);
               delayed_x = TRUE;
             }
           else
@@ -9863,7 +9863,7 @@ genReceive (iCode * ic)
     }
 
   if (delayed_x)
-    pullReg (m6502_reg_x);
+    loadRegTemp (m6502_reg_x, TRUE);
 
   freeAsmop (IC_RESULT (ic), NULL, ic, TRUE);
 }
