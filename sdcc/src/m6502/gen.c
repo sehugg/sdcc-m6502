@@ -1632,6 +1632,7 @@ transferAopAop (asmop *srcaop, int srcofs, asmop *dstaop, int dstofs)
 /*                   freeAsmop is called with aop, the stacked data will    */
 /*                   be copied to the original aop location.                */
 /*--------------------------------------------------------------------------*/
+// TODO????
 static asmop *
 forceStackedAop (asmop * aop, bool copyOrig)
 {
@@ -8421,7 +8422,8 @@ preparePointer (operand* left, int offset, char* rematOfs, operand* right)
 {
   // TODO: really do we need this?
   asmop *newaop = newAsmop (AOP_DIR);
-  newaop->aopu.aop_dir = "__TEMP";
+  newaop->aopu.aop_dir = Safe_calloc (1, 8+1);
+  sprintf(newaop->aopu.aop_dir, "__TEMP+%d", _G.tempOfs);
   newaop->size = 2;
   
   /* The rematerialized offset may have a "#" prefix; skip over it */
@@ -8481,6 +8483,7 @@ preparePointer (operand* left, int offset, char* rematOfs, operand* right)
       pullOrFreeReg (m6502_reg_a, needpulla);
     }
     
+  Safe_free (newaop->aopu.aop_dir);
   Safe_free (newaop);
   prepTempOfs = _G.tempOfs;
   _G.tempOfs += 2;
