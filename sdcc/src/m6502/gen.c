@@ -8810,15 +8810,15 @@ genPackBits (operand * result, operand * left, sym_link * etype, operand * right
       emitcode ("and", "#0x%02x", (~mask) & 0xff);
       regalloc_dry_run_cost += 2;
       m6502_dirtyReg (m6502_reg_a, FALSE);
-      pushReg (m6502_reg_a, TRUE);
+      storeRegTemp (m6502_reg_a, TRUE);
 
       loadRegIndexed (m6502_reg_a, litOffset, rematOffset);
       emitcode ("and", "#0x%02x", mask);
-      emitcode ("ora18", "1,s");
+      emitcode ("ora", TEMPFMT, _G.tempOfs-1);
       regalloc_dry_run_cost += 5;
       storeRegIndexed (m6502_reg_a, litOffset, rematOffset);
-      pullReg (m6502_reg_a);
-
+      loadRegTemp (m6502_reg_a, TRUE);
+      // TODO? redundant?
       pullOrFreeReg (m6502_reg_a, needpulla);
       return;
     }
@@ -9169,7 +9169,8 @@ genPointerSet (iCode * ic, iCode * pi)
 
   // shortcut for [aa],y (or [aa,x]) if already in zero-page
   // and we're not storing to the same pointer location
-  if (AOP_TYPE (result) == AOP_DIR && !rematOffset && litOffset >= 0 && litOffset <= 256-size
+  if (!(IS_BITVAR (retype) || IS_BITVAR (letype))
+      && AOP_TYPE (result) == AOP_DIR && !rematOffset && litOffset >= 0 && litOffset <= 256-size
       && !sameRegs(AOP(right), AOP(result)) ) {
   
     needpulla = pushRegIfSurv (m6502_reg_a);
