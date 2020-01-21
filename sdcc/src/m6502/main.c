@@ -241,7 +241,6 @@ _m6502_genAssemblerPreamble (FILE * of)
       fprintf (of, "\tjmp\t__sdcc_program_startup\n");
       fprintf (of, "__sdcc_init_data:\n");
 
-      // TODO: what if l_XINIT > 255?
       // TODO: fprintf (of, "\t.ifgt\tl_XINIT\n");
       fprintf (of, "\t.globl\t___memcpy\n");
       fprintf (of, "; _m6502_genXINIT() start\n");
@@ -282,18 +281,22 @@ _m6502_genAssemblerPreamble (FILE * of)
       fprintf (of, "        lda #<s_XSEG\n");
       fprintf (of, "        ldx #>s_XSEG\n");
       fprintf (of, "        jsr _memset\n");
+      fprintf (of, "; _m6502_genXSEG() end\n");
+
+      // TODO: .if > 0
       /*
+      fprintf (of, "; _m6502_genDSEG() start\n");
       fprintf (of, "        ldx  #0\n");
       fprintf (of, "        txa\n");
       fprintf (of, "00003$:\n");
-      fprintf (of, "        cpx  #l_XSEG\n");
+      fprintf (of, "        cpx  #l_DSEG\n");
       fprintf (of, "        beq  00004$\n");
-      fprintf (of, "        sta  s_XSEG,x\n");
+      fprintf (of, "        sta  *s_DSEG,x\n");
       fprintf (of, "        inx\n");
       fprintf (of, "        bne  00003$\n");
       fprintf (of, "00004$:\n");
+      fprintf (of, "; _m6502_genDSEG() end\n");
       */
-      fprintf (of, "; _m6502_genXSEG() end\n");
 
       fprintf (of, "\t.area GSFINAL\n");
       fprintf (of, "\tjmp\t__sdcc_program_startup\n\n");

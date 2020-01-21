@@ -22,6 +22,8 @@ T2_isr (void) __interrupt 5 //no using
 void
 try_fun (jmp_buf catch, int except)
 {
+  __prints(" lj1 ");
+  __printd(except);
   longjmp (catch, except);
 }
 
@@ -29,6 +31,7 @@ jmp_buf buf;
 
 void g(void)
 {
+        __prints(" lj2 0 ");
 	longjmp(buf, 0); // When called with an argument of 0, longjmp() makes setjmp() return 1 instead.
 	g();
 }
@@ -38,7 +41,10 @@ void f1(void)
 	static int i;
 	int j;
 	i= 0;
+        __prints(" sj1 ");
 	j= setjmp(buf);
+        __prints(" sjr1 ");
+        __printd(j);
 	ASSERT(i == j);
 	i++;
 	if(!j)
@@ -62,7 +68,10 @@ testJmp (void)
   TF2 = 1;
 #endif
 
+  __prints(" sj2 ");
   exception = setjmp (catch);
+  __prints(" sjr2 ");
+  __printd(exception);
   if (exception == 0)
     {
       try_fun (catch, 1);
