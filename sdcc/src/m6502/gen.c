@@ -3195,6 +3195,7 @@ aopAdrStr (asmop * aop, int loffset, bool bit16)
         // did we get stack pointer in X?
         if (m6502_reg_x->aop == &tsxaop) {
           // hc08's tsx returns +1, ours returns +0
+          //DD( emitcode( "", "; %d + %d + %d + %d + 1", _G.stackOfs, _G.tsxStackPushes, aop->aopu.aop_stk, offset ));
           xofs = STACK_TOP + _G.stackOfs + _G.tsxStackPushes + aop->aopu.aop_stk + offset + 1;
           sprintf (s, "%d,x", xofs);
           rs = Safe_calloc (1, strlen (s) + 1);
@@ -5413,7 +5414,7 @@ genCmp (iCode * ic, iCode * ifx)
 
       inst = branchInstCmp (opcode, sign);
       emitBranch (inst, tlbl);
-      pullOrFreeReg (m6502_reg_a, needpulla); // if check N or Z, we need to pull after flag check
+      if (needpulla) emitcode("pla", ""); // if check N or Z, we need to pull after flag check
       emitBranch ("jmp", jlbl);
       if (!regalloc_dry_run)
         emitLabel (tlbl);
